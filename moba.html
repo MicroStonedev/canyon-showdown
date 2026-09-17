@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>峡谷对决 - 5v5 推塔对战</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #14171f;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #e0e0e0; }
+  canvas#game { display: block; cursor: crosshair; }
+  canvas#minimap { position: absolute; right: 14px; top: 60px; border: 2px solid #333a4a;
+    border-radius: 6px; background: #10131a; }
+
+  /* ===== 顶部信息条 ===== */
+  #topBar { position: absolute; top: 0; left: 0; right: 0; height: 52px;
+    display: flex; align-items: center; justify-content: center; gap: 18px;
+    background: linear-gradient(#1a1d24dd,#1a1d2400); pointer-events: none; }
+  .cryWrap { width: 260px; }
+  .cryWrap .lab { font-size: 12px; margin-bottom: 3px; }
+  .bar { height: 12px; background: #0d0f14; border: 1px solid #333a4a; border-radius: 6px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 5px; }
+  .bar > i.blue { background: #3f8cff; } .bar > i.red { background: #ff5252; }
+  .cryWrap.r { text-align: right; }
+  #timer { font-size: 18px; font-weight: bold; color: #fff; min-width: 64px; text-align: center; }
+  .score { font-size: 20px; font-weight: bold; }
+  .score.b { color: #6db3ff; } .score.r { color: #ff8a80; }
+
+  /* ===== 战报 ===== */
+  #feed { position: absolute; left: 14px; top: 60px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  .feedItem { background: #1a1d24cc; border-left: 3px solid #4caf50; padding: 4px 10px;
+    border-radius: 4px; font-size: 13px; animation: fadeout 5s forwards; }
+  @keyframes fadeout { 0%{opacity:1} 75%{opacity:1} 100%{opacity:0} }
+
+  /* ===== 底部状态栏 ===== */
+  #hud { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px; background: #1a1d24ee;
+    border: 1px solid #333a4a; border-radius: 12px; padding: 10px 18px; }
+  #pLv { width: 46px; height: 46px; border-radius: 50%; background: #2b3242; border: 2px solid #4caf50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; }
+  #pLv small { font-size: 9px; color: #9aa3b5; } #pLv b { font-size: 17px; color: #7ee08a; }
+  .hpCol { width: 240px; }
+  #pHpBar { height: 16px; } #pHpFill { background: #4caf50 !important; width: 100%; }
+  #pXpBar { height: 6px; margin-top: 4px; } #pXpFill { background: #ffd54f !important; width: 0%; }
+  #pHpText { font-size: 11px; color: #9aa3b5; margin-top: 2px; text-align: center; }
+  .cdBox { position: relative; width: 52px; height: 52px; border-radius: 10px;
+    background: #2b3242; border: 2px solid #555e73; overflow: hidden; text-align: center; }
+  .cdBox .k { position: absolute; bottom: 1px; right: 4px; font-size: 10px; color: #9aa3b5; }
+  .cdBox .ico { line-height: 48px; font-size: 22px; }
+  .cdBox .nm { position: absolute; top: -16px; left: 0; right: 0; font-size: 10px; color: #9aa3b5; }
+  #skillCd { position: absolute; left: 0; bottom: 0; right: 0; height: 0%; background: #000000b0; }
+  #skillTxt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: #fff; font-weight: bold; }
+  #atkIco { border-color: #7a8194; }
+  .hint { font-size: 11px; color: #7a8194; line-height: 1.7; }
+
+  /* ===== 居中提示 ===== */
+  #centerMsg { position: absolute; top: 34%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 40px; font-weight: bold; color: #fff; text-shadow: 0 0 18px #000; display: none; pointer-events: none; }
+
+  /* ===== 选人界面 ===== */
+  .overlay { position: absolute; inset: 0; background: #14171ff2; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+  .overlay h1 { font-size: 34px; color: #4caf50; letter-spacing: 4px; margin-bottom: 6px; }
+  .overlay .sub { color: #9aa3b5; margin-bottom: 26px; font-size: 14px; }
+  #roleCards { display: flex; gap: 16px; margin-bottom: 26px; }
+  .card { width: 190px; background: #1e2330; border: 2px solid #333a4a; border-radius: 12px;
+    padding: 16px; cursor: pointer; transition: all .15s; }
+  .card:hover { border-color: #4caf50; transform: translateY(-4px); }
+  .card.sel { border-color: #4caf50; background: #213028; box-shadow: 0 0 14px #4caf5055; }
+  .card .face { font-size: 30px; text-align: center; margin-bottom: 6px; }
+  .card h3 { text-align: center; font-size: 18px; margin-bottom: 8px; }
+  .card .st { font-size: 12px; color: #9aa3b5; line-height: 1.8; }
+  .card .sk { font-size: 12px; color: #ffd54f; margin-top: 8px; line-height: 1.5; }
+  .bigBtn { background: #4caf50; color: #fff; border: none; padding: 13px 60px; border-radius: 10px;
+    font-size: 19px; cursor: pointer; }
+  .bigBtn:hover { background: #5fc262; }
+  .bigBtn:disabled { background: #3a3f4b; cursor: not-allowed; }
+  .ctrlTip { margin-top: 22px; color: #7a8194; font-size: 13px; line-height: 2; text-align: center; }
+  .ctrlTip b { color: #cfd6e4; background: #2b3242; padding: 1px 7px; border-radius: 4px; margin: 0 2px; }
+
+  #endScreen { display: none; }
+  #endTitle { font-size: 52px; margin-bottom: 10px; }
+  #endStats { font-size: 16px; color: #cfd6e4; margin-bottom: 30px; line-height: 2; text-align: center; }
+  .win { color: #ffd54f; text-shadow: 0 0 24px #ffd54f66; }
+  .lose { color: #ff5252; text-shadow: 0 0 24px #ff525266; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<canvas id="minimap" width="184" height="92"></canvas>
+
+<div id="topBar">
+  <div class="score b" id="bScore">0</div>
+  <div class="cryWrap"><div class="lab">蓝方水晶</div><div class="bar"><i class="blue" id="bCryBar"></i></div></div>
+  <div id="timer">00:00</div>
+  <div class="cryWrap r"><div class="lab">红方水晶</div><div class="bar"><i class="red" id="rCryBar"></i></div></div>
+  <div class="score r" id="rScore">0</div>
+</div>
+
+<div id="feed"></div>
+<div id="centerMsg"></div>
+
+<div id="hud" style="display:none">
+  <div id="pLv"><small>等级</small><b id="pLvN">1</b></div>
+  <div class="hpCol">
+    <div class="bar" id="pHpBar"><i id="pHpFill"></i></div>
+    <div class="bar" id="pXpBar"><i id="pXpFill"></i></div>
+    <div id="pHpText">550 / 550</div>
+  </div>
+  <div class="cdBox" id="atkIco"><div class="nm">普攻</div><div class="ico">⚔️</div><div class="k">左键</div></div>
+  <div class="cdBox"><div class="nm" id="skillName">技能</div><div class="ico" id="skillIco">✨</div><div class="k">右键</div>
+    <div id="skillCd"></div><div id="skillTxt"></div></div>
+  <div class="cdBox" id="hookBox" style="display:none;border-color:#ffb74d"><div class="nm">钩子</div><div class="ico">🪝</div><div class="k">Q</div></div>
+  <div class="hint">WASD 移动 · 鼠标瞄准<br>左键普攻 · 右键技能 · Q 道具</div>
+</div>
+
+<div class="overlay" id="startScreen">
+  <h1>⚔️ 峡谷对决</h1>
+  <div class="sub">5 v 5 推塔对战 · 经验只能通过击败敌人获得 · 3 级解锁技能 · 最高 9 级</div>
+  <div id="roleCards"></div>
+  <button class="bigBtn" id="startBtn" disabled>开始战斗</button>
+  <div class="ctrlTip">
+    <b>W A S D</b> 移动 &nbsp; <b>鼠标</b> 瞄准 &nbsp; <b>左键</b> 普通攻击（可长按） &nbsp; <b>右键</b> 释放技能 &nbsp; <b>Q</b> 使用道具（钩子）<br>
+    所有攻击均为非指向性弹道，靠走位躲避敌方攻击与技能 · 岩石可挡弹道 · 草丛可隐身 · 拾取道具获得增益（钩子按 Q 发射） · 阵亡后会在泉水复活
+  </div>
+</div>
+
+<div class="overlay" id="endScreen">
+  <h1 id="endTitle">胜利！</h1>
+  <div id="endStats"></div>
+  <button class="bigBtn" id="againBtn">再来一局</button>
+</div>
+
+<script>
+'use strict';
+/* ================= 基础配置 ================= */
+const W = 2400, H = 1200;                 // 世界尺寸
+const LANES = [200, 600, 1000];           // 上 / 中 / 下三路
+const TEAMCOL = ['#3f8cff', '#ff5252'];
+const TOWER = { hp: 1050, range: 330, dmg: 90, cd: 0.92, projSpeed: 400, r: 22 };
+const CRYSTAL = { hp: 3150, r: 34 };
+
+// 岩石墙体：阻挡移动与弹道；蓝方侧定义，红方侧按中心对称（旋转180°）生成，保证两边绝对公平
+const WALLS_BLUE = [
+  { x: 410, y: 330, w: 150, h: 54 }, { x: 880, y: 390, w: 170, h: 52 },   // 上野区
+  { x: 410, y: 816, w: 150, h: 54 }, { x: 880, y: 758, w: 170, h: 52 },   // 下野区（上下镜像）
+];
+const WALLS_MID = [
+  { x: 1178, y: 320, w: 44, h: 190 }, { x: 1178, y: 690, w: 44, h: 190 }, // 河道口岩石，天然居中自对称
+];
+const mirror = a => [...a, ...a.map(t => ({ x: W - t.x - t.w, y: H - t.y - t.h, w: t.w, h: t.h }))];
+const WALLS = [...mirror(WALLS_BLUE), ...WALLS_MID];
+
+// 草丛：围绕防御塔布置——每座塔前方两丛夹道（蹲守/越塔点），中路河道口与基地出口各两丛，同样中心对称
+const BUSHES_BLUE = [
+  { x: 610, y: 88,   w: 120, h: 64 }, { x: 610, y: 244,  w: 120, h: 64 }, // 上路塔前
+  { x: 610, y: 488,  w: 120, h: 64 }, { x: 610, y: 648,  w: 120, h: 64 }, // 中路塔前
+  { x: 610, y: 892,  w: 120, h: 64 }, { x: 610, y: 1048, w: 120, h: 64 }, // 下路塔前
+  { x: 960, y: 492,  w: 120, h: 60 }, { x: 960, y: 648,  w: 120, h: 60 }, // 中路河道口
+  { x: 300, y: 470,  w: 110, h: 70 }, { x: 300, y: 660,  w: 110, h: 70 }, // 基地出口
+];
+const BUSHES = mirror(BUSHES_BLUE);
+
+// ===== 场上随机刷新的道具 =====
+const PICKUP_KINDS = [
+  { k: 'heal',    ico: '❤️', name: '血包', desc: '立即回复 35% 生命' },
+  { k: 'shield',  ico: '🛡️', name: '护盾', desc: '获得吸收伤害的护盾，持续 10 秒' },
+  { k: 'stealth', ico: '👻', name: '隐身', desc: '对敌人隐身 6 秒（受伤破隐）' },
+  { k: 'sprint',  ico: '👟', name: '疾跑', desc: '移速大幅提升 5 秒' },
+  { k: 'hook',    ico: '🪝', name: '钩子', desc: '按 Q 发射，把命中的敌人勾到身前' },
+];
+function randomPickupPos() {
+  for (let i = 0; i < 30; i++) {
+    const x = 150 + Math.random() * 2100, y = 120 + Math.random() * 960;
+    if (WALLS.some(w => circleRectHit(x, y, 36, w))) continue;
+    if (Math.hypot(x - 120, y - 600) < 230 || Math.hypot(x - 2280, y - 600) < 230) continue;  // 避开泉水
+    if (pickups.some(p => Math.hypot(p.x - x, p.y - y) < 100)) continue;
+    return { x, y };
+  }
+  return null;
+}
+function spawnPickup() {
+  if (pickups.length >= 8) return;
+  const pos = randomPickupPos(); if (!pos) return;
+  const kind = PICKUP_KINDS[Math.floor(Math.random() * PICKUP_KINDS.length)];
+  pickups.push({ ...pos, k: kind.k, ico: kind.ico, t: Math.random() * 6.28 });
+}
+function applyPickup(c, p) {
+  const info = PICKUP_KINDS.find(k => k.k === p.k);
+  if (p.k === 'heal') {
+    const h = Math.min(c.maxHp * 0.35, c.maxHp - c.hp);
+    c.hp += h;
+    fx.push({ type: 'text', x: c.x, y: c.y - 30, txt: '+' + Math.round(h), color: '#7ee08a', life: 1 });
+  } else if (p.k === 'shield') {
+    c.shield = 200 + 30 * c.lvl; c.shieldT = 10;
+  } else if (p.k === 'stealth') {
+    c.stealthT = 6;
+  } else if (p.k === 'sprint') {
+    c.sprintT = 5;
+  } else if (p.k === 'hook') {
+    c.hook = true;
+  }
+  fx.push({ type: 'text', x: c.x, y: c.y - 44, txt: p.ico + ' ' + info.name, color: '#ffffff', life: 1 });
+  if (c.isPlayer) feed(`拾取 ${p.ico}【${info.name}】${info.desc}`);
+}
+// 钩子：Q 发射的直线弹道，命中敌方英雄后将其拉到身前
+function fireHook(c, ang) {
+  if (!c.hook || c.dead) return;
+  c.hook = false;
+  projs.push({ x: c.x, y: c.y, vx: Math.cos(ang) * 640, vy: Math.sin(ang) * 640,
+    team: c.team, owner: c, dmg: 30, r: 10, pierce: false, range: 520, travel: 0, hit: new Set(), kind: 'hook' });
+}
+// Q 键：仅用于使用钩子道具
+function tryHook(c, forcedAng) {
+  if (c.dead || state !== 'playing' || !c.hook) return;
+  fireHook(c, forcedAng !== undefined ? forcedAng : c.aim);
+}
+
+const ROLES = {
+  marksman: { cn:'射手', face:'🏹', hp:385, hpL:49,  atk:38, atkL:6, atkCd:0.46, range:300, pSpeed:520, move:230, r:15,
+    skill:{ name:'穿云箭', cd:8,  ico:'➹', desc:'直线穿透长箭，命中路径上所有敌人' } },
+  assassin: { cn:'刺客', face:'🗡️', hp:350, hpL:42,  atk:78, atkL:14, atkCd:0.70, range:80, meleeR:75, meleeArc:0.125, pSpeed:560, move:265, r:15,
+    skill:{ name:'影袭',   cd:10, ico:'💫', desc:'向瞄准方向突进，对路径敌人造成伤害并短暂加速' } },
+  tank:     { cn:'肉盾', face:'🛡️', hp:595, hpL:77,  atk:26, atkL:4, atkCd:0.80, range:105, meleeR:100, pSpeed:420, move:205, r:18,
+    skill:{ name:'震地',   cd:12, ico:'💥', desc:'0.6秒后重击周围大地，伤害并减速敌人' } },
+  support:  { cn:'辅助', face:'✚',  hp:434, hpL:55,  atk:30, atkL:5, atkCd:0.60, range:280, pSpeed:480, move:225, r:15,
+    skill:{ name:'圣光波', cd:11, ico:'🌟', desc:'放出宽幅光波：伤害敌人、治疗途经的友军' } },
+};
+const roleKeys = ['marksman','assassin','tank','support'];
+
+const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
+const mm = document.getElementById('minimap'), mctx = mm.getContext('2d');
+const $ = id => document.getElementById(id);
+
+/* ================= 游戏状态 ================= */
+let state = 'select';                       // select / playing / over
+let champs = [], towers = [], crystals = [], projs = [], telegraphs = [], fx = [], pickups = [], pickupTimer = 5;
+let teamKills = [0, 0], gameTime = 0, player = null;
+const cam = { x: 0, y: 0 };
+const keys = {}, mouse = { x: 0, y: 0, down: false };
+let selectedRole = null;
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const inRect = (p, r) => p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h;
+function circleRectHit(px, py, r, w) {
+  const nx = clamp(px, w.x, w.x + w.w), ny = clamp(py, w.y, w.y + w.h);
+  return (px - nx) ** 2 + (py - ny) ** 2 < r * r;
+}
+// 草丛视野：敌人进草后不可见（贴近或同草除外）
+// 草丛/隐身道具视野：敌人进草或隐身时不可见（贴近或同草除外）
+function seenBy(v, t) {
+  if (v.team === t.team) return true;
+  if (!t.inBush && !(t.stealthT > 0)) return true;
+  return dist(v, t) < 130 || BUSHES.some(b => inRect(v, b) && inRect(t, b));
+}
+// 两点间视线是否被岩石阻挡（近战挥击不能隔墙打人）
+function losBlocked(x0, y0, x1, y1) {
+  const d = Math.hypot(x1 - x0, y1 - y0), steps = Math.max(1, Math.ceil(d / 16));
+  for (let i = 1; i < steps; i++) {
+    const px = x0 + (x1 - x0) * i / steps, py = y0 + (y1 - y0) * i / steps;
+    if (WALLS.some(w => circleRectHit(px, py, 5, w))) return true;
+  }
+  return false;
+}
+// 突进路径撞墙截断：返回墙前的落点
+function clipDash(x0, y0, x1, y1) {
+  const d = Math.hypot(x1 - x0, y1 - y0), steps = Math.ceil(d / 12);
+  for (let i = 1; i <= steps; i++) {
+    const px = x0 + (x1 - x0) * i / steps, py = y0 + (y1 - y0) * i / steps;
+    if (WALLS.some(w => circleRectHit(px, py, 18, w)))
+      return { x: x0 + (x1 - x0) * (i - 1) / steps, y: y0 + (y1 - y0) * (i - 1) / steps };
+  }
+  return { x: x1, y: y1 };
+}
+// 撞墙推出（圆心陷入矩形时沿最短轴推出）
+function resolveWalls(c) {
+  const r = ROLES[c.role].r;
+  for (const w of WALLS) {
+    if (!circleRectHit(c.x, c.y, r, w)) continue;
+    const nx = clamp(c.x, w.x, w.x + w.w), ny = clamp(c.y, w.y, w.y + w.h);
+    const dx = c.x - nx, dy = c.y - ny, d2 = dx * dx + dy * dy;
+    if (d2 > 0.0001) { const d = Math.sqrt(d2); c.x = nx + dx / d * r; c.y = ny + dy / d * r; }
+    else {
+      const L = c.x - w.x, R = w.x + w.w - c.x, T = c.y - w.y, B = w.y + w.h - c.y, m = Math.min(L, R, T, B);
+      if (m === L) c.x = w.x - r; else if (m === R) c.x = w.x + w.w + r;
+      else if (m === T) c.y = w.y - r; else c.y = w.y + w.h + r;
+    }
+  }
+}
+// AI 绕墙：前方 76px 有岩石就偏转方向
+function avoidAngle(x, y, ang) {
+  const clear = a => !WALLS.some(w => circleRectHit(x + Math.cos(a) * 76, y + Math.sin(a) * 76, 20, w));
+  if (clear(ang)) return ang;
+  for (const off of [0.55, -0.55, 1.1, -1.1, 1.7, -1.7, 2.4, -2.4]) if (clear(ang + off)) return ang + off;
+  return ang + Math.PI;
+}
+
+/* ================= 选人界面 ================= */
+const cardsBox = $('roleCards');
+roleKeys.forEach(k => {
+  const r = ROLES[k], c = document.createElement('div');
+  c.className = 'card';
+  c.innerHTML = `<div class="face">${r.face}</div><h3>${r.cn}</h3>
+    <div class="st">生命 ${r.hp}（+${r.hpL}/级）<br>攻击 ${r.atk}（+${r.atkL}/级）<br>${r.meleeR ? `近战 · 范围 ${r.meleeR}${r.meleeArc && r.meleeArc < 1 ? ` · 正面${Math.round(r.meleeArc * 360)}°` : ' · 全方位'}` : `攻击距离 ${r.range}`} · 移速 ${r.move}</div>
+    <div class="sk">【${r.skill.name}】冷却 ${r.skill.cd}s<br>${r.skill.desc}</div>`;
+  c.onclick = () => {
+    document.querySelectorAll('.card').forEach(x => x.classList.remove('sel'));
+    c.classList.add('sel'); selectedRole = k; $('startBtn').disabled = false;
+  };
+  cardsBox.appendChild(c);
+});
+$('startBtn').onclick = () => { $('startScreen').style.display = 'none'; initWorld(selectedRole); };
+$('againBtn').onclick = () => { $('endScreen').style.display = 'none'; $('hud').style.display = 'none'; $('startScreen').style.display = 'flex'; state = 'select'; };
+
+/* ================= 世界初始化 ================= */
+function mkChamp(role, team, name, idx, isPlayer) {
+  const r = ROLES[role];
+  const sx = team === 0 ? 120 : 2280, sy = 600;
+  return {
+    role, team, name, isPlayer: !!isPlayer,
+    x: sx + (team === 0 ? idx * 34 : -idx * 34), y: sy + (idx - 2) * 40,
+    vx: 0, vy: 0, aim: team === 0 ? 0 : Math.PI,
+    hp: r.hp, maxHp: r.hp, lvl: 1, xp: 0,
+    atkCdT: 0, skillCdT: 0,
+    slowT: 0, speedT: 0, sprintT: 0, stealthT: 0, shield: 0, shieldT: 0, hook: false, hooked: null, lastCombat: -99, assistLog: new Map(),
+    dashT: 0, dashFrom: null, dashTo: null, dashHit: false,
+    dead: false, respawnT: 0,
+    kills: 0, deaths: 0, dmg: 0,
+    ai: { lane: idx % 3, t: Math.random() * 10, ph: Math.random() * 6.28, st: 'push' },
+  };
+}
+
+function initWorld(playerRole) {
+  champs = []; towers = []; crystals = []; projs = []; telegraphs = []; fx = [];
+  teamKills = [0, 0]; gameTime = 0; $('feed').innerHTML = '';
+  pickups = []; pickupTimer = 4;
+  for (let i = 0; i < 4; i++) spawnPickup();
+
+  // 我方：玩家 + 4 个 AI（补齐另外三系 + 随机一个）
+  const others = roleKeys.filter(r => r !== playerRole);
+  const blueRoles = [playerRole, ...others, others[Math.floor(Math.random() * 3)]];
+  const blueNames = ['你', '寒冰', '疾风', '铁壁', '晨曦'];
+  blueRoles.forEach((rl, i) => champs.push(mkChamp(rl, 0, blueNames[i], i, i === 0)));
+  // 敌方：四系各一 + 随机一个
+  const redRoles = [...roleKeys, roleKeys[Math.floor(Math.random() * 4)]];
+  const redNames = ['夜刃', '烈焰', '磐石', '星辰', '暗影'];
+  redRoles.forEach((rl, i) => champs.push(mkChamp(rl, 1, redNames[i], i, false)));
+  player = champs[0];
+
+  LANES.forEach(y => {
+    towers.push({ team: 0, x: 520,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });
+    towers.push({ team: 1, x: 1880, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });
+  });
+  crystals = [
+    { team: 0, x: 170,  y: 600, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp },
+    { team: 1, x: 2230, y: 600, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp },
+  ];
+
+  const sk = ROLES[playerRole].skill;
+  $('skillName').textContent = sk.name + '（' + sk.cd + 's）';
+  $('skillIco').textContent = sk.ico;
+  $('hud').style.display = 'flex';
+  feed('摧毁敌方水晶即可获胜！', '#4caf50');
+  feed('击败敌方英雄才能获得经验（助攻共享），推塔不提供经验', '#ffd54f');
+  feed('脱离战斗（攻击也算战斗）5 秒后每秒恢复 5% 生命；泉水无回复，仅作复活点', '#ff8a80');
+  feed('辅助的普攻命中友军会治疗友军（右键技能，Q 用道具）', '#7ee08a');
+  feed('地形围绕防御塔布置：塔前草丛可蹲守越塔，岩石阻挡移动与弹道');
+  feed('场上随机刷新道具：❤️血包 🛡️护盾 👻隐身 👟疾跑 🪝钩子(Q发射)');
+  state = 'playing';
+}
+
+/* ================= 战报 / 提示 ================= */
+function feed(txt, color) {
+  const d = document.createElement('div');
+  d.className = 'feedItem'; d.textContent = txt;
+  if (color) d.style.borderLeftColor = color;
+  $('feed').appendChild(d);
+  setTimeout(() => d.remove(), 5000);
+  while ($('feed').children.length > 5) $('feed').firstChild.remove();
+}
+function centerMsg(txt, dur) {
+  const el = $('centerMsg'); el.textContent = txt; el.style.display = 'block';
+  clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', dur || 1500);
+}
+
+/* ================= 输入 ================= */
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if (k === 'q' && state === 'playing') {
+    if (player.hook) tryHook(player);
+    else centerMsg('Q 仅用于道具（钩子），技能按右键', 800);
+  }
+});
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+window.addEventListener('mousedown', e => { if (e.button === 0) mouse.down = true; if (e.button === 2 && state === 'playing') trySkill(player); });  // 右键专用技能
+window.addEventListener('mouseup', e => { if (e.button === 0) mouse.down = false; });
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+/* ================= 攻击与技能 ================= */
+function fireProj(o, x, y, ang) {
+  projs.push({
+    x, y, vx: Math.cos(ang) * o.psp, vy: Math.sin(ang) * o.psp,
+    team: o.team, owner: o.owner, dmg: o.dmg, r: o.pr, pierce: !!o.pierce,
+    range: o.rng, travel: 0, hit: new Set(),
+    kind: o.kind || 'basic', heal: o.heal || 0,
+  });
+}
+// 普攻：射手/辅助为直线弹道（非指向、可躲避）；肉盾/刺客为近战范围挥击（以自身为圆心立即结算）
+function tryAttack(c) {
+  if (c.dead || c.atkCdT > 0) return;
+  c.lastCombat = gameTime;                              // 发起攻击即视为进入战斗：攻击期间不享受脱战回血
+  const r = ROLES[c.role];
+  if (r.meleeR) {
+    const mr = r.meleeR, half = Math.PI * (r.meleeArc || 1);   // meleeArc：扇形占整圆比例（1=全方位整圆）
+    // 近战判定：meleeArc<1 时为正前方扇形（刺客 1/8 圆）；肉盾为整圆无方向限制
+    // 刺客的挥击不能穿越墙体（有视线遮挡就不命中）
+    const wallBlind = r.meleeArc < 1;
+    const inArc = (x, y, rad) => {
+      if (dist(c, { x, y }) >= mr + rad) return false;
+      if (wallBlind && losBlocked(c.x, c.y, x, y)) return false;
+      if (half >= Math.PI) return true;
+      let diff = Math.abs(Math.atan2(y - c.y, x - c.x) - c.aim);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      return diff <= half;
+    };
+    champs.forEach(t => { if (!t.dead && t.team !== c.team && inArc(t.x, t.y, ROLES[t.role].r)) hurtChamp(t, cAtk(c), c); });
+    towers.forEach(t => { if (t.alive && t.team !== c.team && inArc(t.x, t.y, TOWER.r)) hurtStruct(t, cAtk(c), c, false); });
+    const cr = crystals[1 - c.team];
+    if (inArc(cr.x, cr.y, CRYSTAL.r)) hurtStruct(cr, cAtk(c), c, true);
+    if (half >= Math.PI) fx.push({ type: 'ring', x: c.x, y: c.y, r: mr, life: 0.28, color: c.team === 0 ? '#9ecfff' : '#ff8a80' });
+    else fx.push({ type: 'arc', x: c.x, y: c.y, r: mr, a1: c.aim - half, a2: c.aim + half,
+      life: 0.25, color: c.team === 0 ? 'rgba(158,207,255,0.35)' : 'rgba(255,138,128,0.35)' });
+  } else {
+    fireProj({ role: c.role, team: c.team, owner: c, psp: r.pSpeed, dmg: cAtk(c), pr: 6, rng: r.range + 60, kind: 'basic' }, c.x, c.y, c.aim);
+  }
+  c.atkCdT = r.atkCd;
+}
+const cAtk = c => ROLES[c.role].atk + ROLES[c.role].atkL * (c.lvl - 1);
+
+function trySkill(c, forcedAng) {
+  if (c.dead || state !== 'playing') return;
+  if (c.lvl < 3) { if (c.isPlayer) centerMsg('技能 3 级解锁！', 900); return; }
+  if (c.skillCdT > 0) { if (c.isPlayer) centerMsg('技能冷却中 ' + c.skillCdT.toFixed(1) + 's', 800); return; }
+  const ang = forcedAng !== undefined ? forcedAng : c.aim;
+  const lv = c.lvl, r = ROLES[c.role];
+  if (c.role === 'marksman') {
+    fireProj({ team: c.team, owner: c, psp: 760, dmg: 70 + 22 * lv, pr: 18, rng: 780, pierce: true, kind: 'arrow' }, c.x, c.y, ang);
+  } else if (c.role === 'assassin') {
+    c.dashT = 0.16; c.dashFrom = { x: c.x, y: c.y };
+    let tx = clamp(c.x + Math.cos(ang) * 230, 30, W - 30), ty = clamp(c.y + Math.sin(ang) * 230, 30, H - 30);
+    const cp = clipDash(c.x, c.y, tx, ty);               // 影袭撞墙即停，不穿墙
+    c.dashTo = cp;
+    c.dashHit = false; c.speedT = 2;
+  } else if (c.role === 'tank') {
+    telegraphs.push({ x: c.x, y: c.y, r: 130, t: 0, dur: 0.6, team: c.team, owner: c, dmg: 60 + 14 * lv });
+  } else if (c.role === 'support') {
+    fireProj({ team: c.team, owner: c, psp: 340, dmg: 45 + 10 * lv, pr: 34, rng: 550, pierce: true, kind: 'wave', heal: 35 + 10 * lv }, c.x, c.y, ang);
+  }
+  c.skillCdT = r.skill.cd;
+}
+
+/* ================= 伤害 / 经验 / 死亡 ================= */
+const xpNeed = l => l * 120;
+function giveXp(c, amt) {
+  if (c.lvl >= 9) return;
+  c.xp += amt;
+  while (c.lvl < 9 && c.xp >= xpNeed(c.lvl)) {
+    c.xp -= xpNeed(c.lvl);
+    const r = ROLES[c.role];
+    c.lvl++; c.maxHp += r.hpL; c.hp += r.hpL;
+    fx.push({ type: 'text', x: c.x, y: c.y - 34, txt: '升级! Lv' + c.lvl, color: '#ffd54f', life: 1.2 });
+    if (c.isPlayer) feed(`⬆ 升到 ${c.lvl} 级：生命 +${r.hpL}，普攻 +${r.atkL}，技能伤害提升`, '#7ee08a');
+    if (c.isPlayer && c.lvl === 3) { feed('🌟 技能已解锁，按 Q 释放！', '#ffd54f'); centerMsg('技能解锁！', 1200); }
+  }
+}
+function hurtChamp(c, dmg, src) {
+  if (c.dead) return;
+  c.lastCombat = gameTime; if (src) src.lastCombat = gameTime;   // 刷新双方战斗状态
+  if (src && src.team !== c.team) c.assistLog.set(src, gameTime);   // 记录最近伤害来源，用于助攻判定
+  if (c.shield > 0) {                                   // 护盾先吸收伤害
+    const ab = Math.min(c.shield, dmg);
+    c.shield -= ab; dmg -= ab;
+    if (c.shield <= 0) c.shieldT = 0;
+    fx.push({ type: 'text', x: c.x, y: c.y - 12, txt: '(' + Math.round(ab) + ')', color: '#ffd54f', life: 0.6 });
+    if (dmg <= 0) return;
+  }
+  c.hp -= dmg; if (src) src.dmg += dmg;
+  c.stealthT = 0;                                        // 受伤破隐
+  fx.push({ type: 'text', x: c.x + (Math.random() * 20 - 10), y: c.y - 24, txt: '-' + Math.round(dmg), color: TEAMCOL[c.team], life: 0.7 });
+  if (c.hp <= 0) {
+    c.hp = 0; c.dead = true; c.deaths++; c.respawnT = 4 + c.lvl;
+    teamKills[src ? src.team : 1 - c.team]++;
+    if (src) { src.kills++; giveXp(src, 120);
+      // 助攻：目标死亡前 8 秒内对其造成过伤害的队友才能获得经验（与距离无关）
+      champs.forEach(a => {
+        if (a === src || a.dead || a.team !== src.team) return;
+        const t = c.assistLog.get(a);
+        if (t !== undefined && gameTime - t <= 8) giveXp(a, 60);
+      });
+    }
+    feed(`${src ? src.name : '防御塔'} 击杀了 ${c.name}`, TEAMCOL[c.team]);
+    if (c.isPlayer) centerMsg('你已阵亡', 1200);
+  }
+}
+function hurtStruct(s, dmg, src, isCrystal) {
+  s.hp -= dmg; if (src) src.dmg += dmg;
+  if (s.hp <= 0) {
+    s.hp = 0;
+    if (isCrystal) { endGame(1 - s.team); return; }
+    s.alive = false;
+    feed(`${TEAMCOL[src ? src.team : 0] === '#3f8cff' ? '蓝方' : '红方'} 摧毁了防御塔！`, '#ffd54f');
+  }
+}
+
+/* ================= 玩家操作 ================= */
+function updatePlayer(c, dt) {
+  let dx = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0);
+  let dy = (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0);
+  const L = Math.hypot(dx, dy) || 1;
+  c.vx = dx / L * speedOf(c); c.vy = dy / L * speedOf(c);
+  const mw = { x: mouse.x + cam.x, y: mouse.y + cam.y };
+  c.aim = Math.atan2(mw.y - c.y, mw.x - c.x);
+  if (mouse.down) tryAttack(c);
+}
+const speedOf = c => ROLES[c.role].move * (c.slowT > 0 ? 0.5 : 1) * (c.speedT > 0 ? 1.3 : 1) * (c.sprintT > 0 ? 1.45 : 1);
+
+/* ================= AI ================= */
+function nearestFoe(c, maxD) {
+  let best = null, bd = maxD;
+  champs.forEach(t => { if (!t.dead && t.team !== c.team && seenBy(c, t)) { const d = dist(c, t); if (d < bd) { bd = d; best = t; } } });
+  return best;
+}
+function nearestFoeStruct(c) {
+  let best = null, bd = 1e9;
+  towers.forEach(t => { if (t.alive && t.team !== c.team) { const d = dist(c, t); if (d < bd) { bd = d; best = t; } } });
+  const cr = crystals[1 - c.team]; const d = dist(c, cr);
+  if (d < bd) { best = cr; bd = d; }
+  return best;
+}
+function leadAim(c, t) {
+  const tt = dist(c, t) / ROLES[c.role].pSpeed;
+  return Math.atan2(t.y + t.vy * tt * 0.8 - c.y, t.x + t.vx * tt * 0.8 - c.x);
+}
+function dodgeVec(c) {
+  for (const p of projs) {
+    if (p.team === c.team) continue;
+    const dx = c.x - p.x, dy = c.y - p.y, d = Math.hypot(dx, dy);
+    if (d < 180 && dx * p.vx + dy * p.vy < 0) {      // 弹道正朝自己飞来 → 侧移
+      const nx = -p.vy, ny = p.vx, L = Math.hypot(nx, ny) || 1;
+      const side = (dx * nx + dy * ny) >= 0 ? 1 : -1;
+      return { x: nx / L * side * 130, y: ny / L * side * 130 };
+    }
+  }
+  return null;
+}
+function updateBot(c, dt) {
+  const a = c.ai; a.t += dt;
+  const home = { x: c.team === 0 ? 120 : 2280, y: 600 };   // 复活点（泉水已无回复）
+  if (c.hp < c.maxHp * 0.22) a.st = 'retreat';
+  if (a.st === 'retreat') {
+    if (c.hp > c.maxHp * 0.5) a.st = 'push';
+    else {
+      // 无泉水回复：不回城，向远离最近敌人的方向拉扯、就地回血
+      const foe = nearestFoe(c, 900);
+      let ang = foe ? Math.atan2(c.y - foe.y, c.x - foe.x) : Math.atan2(home.y - c.y, home.x - c.x);
+      ang = avoidAngle(c.x, c.y, ang);
+      c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c); applyDodge(c); return;
+    }
+  }
+
+  const foe = nearestFoe(c, 560);
+  const st = nearestFoeStruct(c);
+  let tgt = null, td = 1e9, isStruct = false;
+  if (foe) { tgt = foe; td = dist(c, foe); }
+  if (st) { const sd = dist(c, st); if (!tgt || sd < td) { tgt = st; td = sd; isStruct = true; } }
+
+  const range = ROLES[c.role].range;
+  if (c.hook && tgt && !isStruct && td > 140 && td < 500) {   // AI 有钩子时对中距离敌人出钩
+    c.aim = leadAim(c, tgt); if (Math.random() < 0.04) tryHook(c);
+  }
+  if (tgt && td <= range * 0.92) {                       // 射程内：站桩输出 + 横向走位
+    c.aim = isStruct ? Math.atan2(tgt.y - c.y, tgt.x - c.x) : leadAim(c, tgt);
+    tryAttack(c);
+    const skR = { marksman: 600, assassin: 240, tank: 130, support: 380 }[c.role];
+    if (!isStruct && td < skR) trySkill(c);
+    const s = Math.sin(a.t * 2.6 + a.ph) * 0.9;
+    c.vx = -Math.sin(c.aim) * s * speedOf(c) * 0.7;
+    c.vy =  Math.cos(c.aim) * s * speedOf(c) * 0.7;
+  } else if (tgt && td < 620) {                          // 追击
+    let ang = Math.atan2(tgt.y - c.y, tgt.x - c.x); ang = avoidAngle(c.x, c.y, ang);
+    c.aim = isStruct ? ang : leadAim(c, tgt);
+    c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c);
+    if (td <= range * 1.05) tryAttack(c);
+  } else {                                               // 沿本路推进
+    const laneY = LANES[a.lane], dir = c.team === 0 ? 1 : -1;
+    const towerX = c.team === 0 ? 1880 : 520;
+    let px, py;
+    if (dir * (towerX - c.x) > 60) { px = c.x + dir * 140; py = laneY + Math.sin(a.t * 1.6 + a.ph) * 46; }
+    else { px = c.team === 0 ? 2230 : 170; py = 600; }
+    let ang = Math.atan2(py - c.y, px - c.x); ang = avoidAngle(c.x, c.y, ang);
+    c.aim = ang; c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c);
+  }
+  applyDodge(c);
+}
+function applyDodge(c) {
+  const d = dodgeVec(c);
+  if (d) { c.vx += d.x; c.vy += d.y; }
+}
+
+/* ================= 主更新 ================= */
+function update(dt) {
+  gameTime += dt;
+
+  champs.forEach(c => {
+    c.atkCdT = Math.max(0, c.atkCdT - dt);
+    c.skillCdT = Math.max(0, c.skillCdT - dt);
+    c.slowT = Math.max(0, c.slowT - dt);
+    c.speedT = Math.max(0, c.speedT - dt);
+    c.sprintT = Math.max(0, c.sprintT - dt);
+    c.stealthT = Math.max(0, c.stealthT - dt);
+    if (c.shieldT > 0) { c.shieldT -= dt; if (c.shieldT <= 0) c.shield = 0; }
+
+    if (c.dead) {
+      c.respawnT -= dt;
+      if (c.respawnT <= 0) {
+        c.dead = false; c.hp = c.maxHp; c.ai.st = 'push';
+        c.x = c.team === 0 ? 120 : 2280; c.y = 600 + (Math.random() * 80 - 40);
+      }
+      return;
+    }
+
+    // 被钩子拉拽（期间无法操作）
+    if (c.hooked) {
+      const h = c.hooked; h.t -= dt;
+      const pr = clamp(1 - h.t / h.dur, 0, 1);
+      c.x = h.x0 + (h.x1 - h.x0) * pr; c.y = h.y0 + (h.y1 - h.y0) * pr;
+      resolveWalls(c);
+      if (h.t <= 0) c.hooked = null;
+    } else
+    // 突进位移
+    if (c.dashT > 0) {
+      c.dashT -= dt;
+      const p = 1 - Math.max(0, c.dashT) / 0.16;
+      c.x = c.dashFrom.x + (c.dashTo.x - c.dashFrom.x) * p;
+      c.y = c.dashFrom.y + (c.dashTo.y - c.dashFrom.y) * p;
+      resolveWalls(c);
+      if (!c.dashHit) {                                   // 突进瞬间结算路径伤害
+        c.dashHit = true;
+        const dmg = 80 + 18 * c.lvl;
+        champs.forEach(t => { if (!t.dead && t.team !== c.team && segDist(c.dashFrom, c.dashTo, t) < 44) hurtChamp(t, dmg, c); });
+        fx.push({ type: 'slash', x1: c.dashFrom.x, y1: c.dashFrom.y, x2: c.dashTo.x, y2: c.dashTo.y, life: 0.25, color: '#b39ddb' });
+      }
+    } else {
+      if (c.isPlayer) updatePlayer(c, dt); else updateBot(c, dt);
+      c.x = clamp(c.x + c.vx * dt, 20, W - 20);
+      c.y = clamp(c.y + c.vy * dt, 20, H - 20);
+      resolveWalls(c);
+    }
+
+    // 脱战回血：脱离战斗 5 秒后每秒恢复 5% 最大生命（战斗中不回复）；泉水无回复，仅作复活点
+    if (gameTime - c.lastCombat > 5) c.hp = Math.min(c.maxHp, c.hp + c.maxHp * 0.05 * dt);
+    c.inBush = BUSHES.some(b => inRect(c, b));           // 是否处于草丛（经验只来自击杀，无被动成长）
+  });
+
+  // 道具刷新与拾取
+  pickupTimer -= dt;
+  if (pickupTimer <= 0) { spawnPickup(); pickupTimer = 6 + Math.random() * 4; }
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const p = pickups[i];
+    for (const c of champs) {
+      if (!c.dead && dist(c, p) < ROLES[c.role].r + 16) { applyPickup(c, p); pickups.splice(i, 1); break; }
+    }
+  }
+
+  // 同伴挤开，避免叠罗汉
+  for (let i = 0; i < champs.length; i++) for (let j = i + 1; j < champs.length; j++) {
+    const a = champs[i], b = champs[j];
+    if (a.dead || b.dead) continue;
+    const d = dist(a, b), min = ROLES[a.role].r + ROLES[b.role].r;
+    if (d < min && d > 0.01) {
+      const push = (min - d) / 2, nx = (a.x - b.x) / d, ny = (a.y - b.y) / d;
+      a.x += nx * push; a.y += ny * push; b.x -= nx * push; b.y -= ny * push;
+    }
+  }
+
+  // 防御塔：射向射程内最近敌人（弹道可躲）
+  towers.forEach(t => {
+    if (!t.alive) return;
+    t.cd -= dt;
+    if (t.cd <= 0) {
+      let best = null, bd = TOWER.range;
+      champs.forEach(c => { if (!c.dead && c.team !== t.team && seenBy(t, c)) { const d = dist(c, t); if (d < bd) { bd = d; best = c; } } });
+      if (best) {
+        const tt = bd / TOWER.projSpeed, ang = Math.atan2(best.y + best.vy * tt * 0.7 - t.y, best.x + best.vx * tt * 0.7 - t.x);
+        projs.push({ x: t.x, y: t.y, vx: Math.cos(ang) * TOWER.projSpeed, vy: Math.sin(ang) * TOWER.projSpeed,
+          team: t.team, owner: null, dmg: TOWER.dmg, r: 8, pierce: false, range: TOWER.range + 120, travel: 0, hit: new Set(), kind: 'tower' });
+        t.cd = TOWER.cd;
+      }
+    }
+  });
+
+  // 弹道
+  for (let i = projs.length - 1; i >= 0; i--) {
+    const p = projs[i];
+    p.x += p.vx * dt; p.y += p.vy * dt; p.travel += Math.hypot(p.vx, p.vy) * dt;
+    let dead = p.travel > p.range;
+    if (!dead && WALLS.some(w => circleRectHit(p.x, p.y, p.r, w))) {   // 被岩石挡下
+      dead = true;
+      fx.push({ type: 'ring', x: p.x, y: p.y, r: 6, life: 0.2, color: '#8892a6' });
+    }
+    for (const c of champs) {
+      if (c.dead || p.hit.has(c)) continue;
+      if (dist(p, c) < p.r + ROLES[c.role].r) {
+        p.hit.add(c);
+        if (c.team !== p.team) {
+          if (p.kind === 'hook' && p.owner) {                   // 钩子：把命中的敌人拉到身前
+            const dx = c.x - p.owner.x, dy = c.y - p.owner.y, d = Math.hypot(dx, dy) || 1;
+            c.hooked = { t: 0.32, dur: 0.32, x0: c.x, y0: c.y, x1: p.owner.x + dx / d * 60, y1: p.owner.y + dy / d * 60, by: p.owner };
+            hurtChamp(c, p.dmg, p.owner);
+            dead = true; break;
+          }
+          hurtChamp(c, p.dmg, p.owner); if (!p.pierce) { dead = true; break; }
+        }
+        else if (c !== p.owner && p.owner) {                    // 命中友军：圣光波/辅助普攻会治疗
+          const healSrc = p.kind === 'wave' ? p.heal : (p.owner.role === 'support' ? p.dmg : 0);
+          const h = Math.min(healSrc, c.maxHp - c.hp);
+          if (h > 1) {
+            c.hp += h;
+            fx.push({ type: 'text', x: c.x, y: c.y - 24, txt: '+' + Math.round(h), color: '#7ee08a', life: 0.8 });
+            if (!p.pierce) { dead = true; break; }              // 辅助普攻被友军"接住"
+          }
+        }
+      }
+    }
+    if (!dead && p.owner) for (const t of towers) {           // 只有英雄的弹道能打建筑
+      if (!t.alive || p.hit.has(t) || t.team === p.team) continue;
+      if (dist(p, t) < p.r + TOWER.r) {
+        if (p.kind === 'hook') { dead = true; break; }         // 钩子勾不动建筑
+        p.hit.add(t); hurtStruct(t, p.dmg, p.owner, false); if (!p.pierce) { dead = true; break; }
+      }
+    }
+    if (!dead && p.owner && !p.hit.has(crystals[1 - p.team])) {
+      const cr = crystals[1 - p.team];
+      if (dist(p, cr) < p.r + CRYSTAL.r) {
+        if (p.kind === 'hook') dead = true;
+        else { p.hit.add(cr); hurtStruct(cr, p.dmg, p.owner, true); if (!p.pierce) dead = true; }
+      }
+    }
+    if (dead) projs.splice(i, 1);
+  }
+
+  // 肉盾震地（预警圈到点爆炸）
+  for (let i = telegraphs.length - 1; i >= 0; i--) {
+    const tg = telegraphs[i];
+    tg.t += dt;
+    if (tg.t >= tg.dur) {
+      champs.forEach(c => { if (!c.dead && c.team !== tg.team && dist(c, tg) < tg.r + ROLES[c.role].r) { hurtChamp(c, tg.dmg, tg.owner); c.slowT = 1.5; } });
+      fx.push({ type: 'ring', x: tg.x, y: tg.y, r: tg.r, life: 0.35, color: '#ffb74d' });
+      telegraphs.splice(i, 1);
+    }
+  }
+
+  // 特效生命周期
+  for (let i = fx.length - 1; i >= 0; i--) { fx[i].life -= dt; if (fx[i].life <= 0) fx.splice(i, 1); }
+
+  updateCam(); updateHud();
+}
+function segDist(a, b, p) {
+  const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy || 1;
+  const t = clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / L2, 0, 1);
+  return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
+}
+
+/* ================= 结束 ================= */
+function endGame(winTeam) {
+  if (state === 'over') return;
+  state = 'over';
+  const win = winTeam === 0;
+  $('endTitle').textContent = win ? '🏆 胜利！' : '💀 失败';
+  $('endTitle').className = win ? 'win' : 'lose';
+  $('endStats').innerHTML =
+    `本局用时 ${fmtTime(gameTime)} · 比分 <span style="color:#6db3ff">${teamKills[0]}</span> : <span style="color:#ff8a80">${teamKills[1]}</span><br>` +
+    `你的战绩：等级 ${player.lvl} · 击杀 ${player.kills} · 阵亡 ${player.deaths} · 总输出 ${Math.round(player.dmg)}`;
+  $('endScreen').style.display = 'flex';
+}
+
+/* ================= HUD ================= */
+const fmtTime = t => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+function updateHud() {
+  $('pLvN').textContent = player.lvl;
+  $('pHpFill').style.width = (player.hp / player.maxHp * 100) + '%';
+  $('pXpFill').style.width = (player.lvl >= 9 ? 100 : player.xp / xpNeed(player.lvl) * 100) + '%';
+  const regen = (gameTime - player.lastCombat > 5 && player.hp < player.maxHp) ? ' · 脱战回复中' : '';
+  $('pHpText').textContent = `${Math.ceil(player.hp)} / ${player.maxHp}${regen} · ${ROLES[player.role].cn} ${player.name}`;
+  const sk = ROLES[player.role].skill;
+  if (player.lvl < 3) { $('skillCd').style.height = '100%'; $('skillTxt').textContent = 'Lv3'; }
+  else if (player.skillCdT > 0) { $('skillCd').style.height = (player.skillCdT / sk.cd * 100) + '%'; $('skillTxt').textContent = player.skillCdT.toFixed(1); }
+  else { $('skillCd').style.height = '0%'; $('skillTxt').textContent = ''; }
+  $('hookBox').style.display = player.hook ? '' : 'none';
+  $('bScore').textContent = teamKills[0]; $('rScore').textContent = teamKills[1];
+  $('timer').textContent = fmtTime(gameTime);
+  $('bCryBar').style.width = (crystals[0].hp / crystals[0].maxHp * 100) + '%';
+  $('rCryBar').style.width = (crystals[1].hp / crystals[1].maxHp * 100) + '%';
+  if (player.dead) centerMsg('已阵亡 · ' + Math.ceil(player.respawnT) + ' 秒后复活', 300);
+}
+
+/* ================= 摄像机 ================= */
+function updateCam() {
+  cam.x = W <= canvas.width ? (W - canvas.width) / 2 : clamp(player.x - canvas.width / 2, 0, W - canvas.width);
+  cam.y = H <= canvas.height ? (H - canvas.height) / 2 : clamp(player.y - canvas.height / 2, 0, H - canvas.height);
+}
+
+/* ================= 渲染 ================= */
+function draw() {
+  ctx.fillStyle = '#14171f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.save(); ctx.translate(-cam.x, -cam.y);
+
+  // 中央河道
+  ctx.fillStyle = '#16202c'; ctx.fillRect(1140, 0, 120, H);
+  ctx.fillStyle = '#1a2836'; ctx.fillRect(1156, 0, 88, H);
+
+  // 三路
+  LANES.forEach(y => {
+    ctx.fillStyle = '#1c212e'; ctx.fillRect(0, y - 36, W, 72);
+    ctx.strokeStyle = '#2a3142'; ctx.lineWidth = 2; ctx.setLineDash([16, 20]);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.setLineDash([]);
+  });
+  // 草丛
+  BUSHES.forEach(b => {
+    ctx.fillStyle = 'rgba(62,142,74,0.28)';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = 'rgba(96,186,108,0.4)'; ctx.lineWidth = 2; ctx.strokeRect(b.x, b.y, b.w, b.h);
+  });
+  // 岩石
+  WALLS.forEach(w => {
+    ctx.fillStyle = '#2e3442'; ctx.fillRect(w.x, w.y, w.w, w.h);
+    ctx.strokeStyle = '#4a5470'; ctx.lineWidth = 3; ctx.strokeRect(w.x, w.y, w.w, w.h);
+  });
+
+  // 道具（上下浮动）
+  pickups.forEach(p => {
+    const bob = Math.sin(gameTime * 3 + p.t) * 4;
+    ctx.beginPath(); ctx.arc(p.x, p.y + bob, 14, 0, 7);
+    ctx.fillStyle = '#262c3a'; ctx.fill();
+    ctx.strokeStyle = '#8a93aa'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '15px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(p.ico, p.x, p.y + bob + 5);
+  });
+
+  // 泉水
+  [[0, 120, 600], [1, 2280, 600]].forEach(([t, x, y]) => {
+    ctx.beginPath(); ctx.arc(x, y, 170, 0, 7);
+    ctx.fillStyle = t === 0 ? '#3f8cff14' : '#ff525214'; ctx.fill();
+    ctx.strokeStyle = TEAMCOL[t] + '55'; ctx.lineWidth = 2; ctx.stroke();
+  });
+
+  // 防御塔
+  towers.forEach(t => {
+    if (!t.alive) return;
+    ctx.beginPath(); ctx.arc(t.x, t.y, TOWER.range, 0, 7);
+    ctx.strokeStyle = (t.team === player.team ? '#3f8cff' : '#ff5252') + '20'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#0d0f14'; ctx.strokeStyle = TEAMCOL[t.team]; ctx.lineWidth = 3;
+    ctx.fillRect(t.x - 17, t.y - 17, 34, 34); ctx.strokeRect(t.x - 17, t.y - 17, 34, 34);
+    ctx.fillStyle = TEAMCOL[t.team]; ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('🗼', t.x, t.y + 6);
+    bar(t.x, t.y - 30, 40, 5, t.hp / t.maxHp, TEAMCOL[t.team]);
+  });
+
+  // 水晶
+  crystals.forEach(cr => {
+    ctx.save(); ctx.translate(cr.x, cr.y); ctx.rotate(Math.PI / 4);
+    ctx.shadowColor = TEAMCOL[cr.team]; ctx.shadowBlur = 22;
+    ctx.fillStyle = TEAMCOL[cr.team]; ctx.fillRect(-22, -22, 44, 44);
+    ctx.restore();
+    bar(cr.x, cr.y - 46, 60, 7, cr.hp / cr.maxHp, TEAMCOL[cr.team]);
+    ctx.fillStyle = '#9aa3b5'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(cr.team === 0 ? '蓝方水晶' : '红方水晶', cr.x, cr.y + 46);
+  });
+
+  // 震地预警圈
+  telegraphs.forEach(tg => {
+    const p = tg.t / tg.dur;
+    ctx.beginPath(); ctx.arc(tg.x, tg.y, tg.r, 0, 7);
+    ctx.strokeStyle = '#ffb74d'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = `rgba(255,183,77,${0.06 + p * 0.24})`; ctx.fill();
+    ctx.beginPath(); ctx.arc(tg.x, tg.y, tg.r * p, 0, 7);
+    ctx.strokeStyle = '#ffb74dcc'; ctx.stroke();
+  });
+
+  // 弹道
+  projs.forEach(p => {
+    if (p.kind === 'arrow') {
+      ctx.strokeStyle = '#ffe082'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(p.x - p.vx * 0.03, p.y - p.vy * 0.03); ctx.lineTo(p.x, p.y); ctx.stroke();
+    } else if (p.kind === 'wave') {
+      ctx.fillStyle = 'rgba(255,241,118,0.30)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#fff59d'; ctx.lineWidth = 2; ctx.stroke();
+    } else if (p.kind === 'tower') {
+      ctx.fillStyle = '#ffab40'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+    } else {
+      ctx.fillStyle = p.team === player.team ? '#9ecfff' : '#ff8a80';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+    }
+  });
+
+  // 英雄
+  champs.forEach(c => {
+    if (c.dead || !seenBy(player, c)) return;            // 草丛中的敌人不渲染
+    const r = ROLES[c.role].r;
+    if (c.isPlayer) {                                     // 瞄准线
+      const rl = ROLES[c.role].meleeR || ROLES[c.role].range;
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(c.x, c.y);
+      ctx.lineTo(c.x + Math.cos(c.aim) * rl, c.y + Math.sin(c.aim) * rl); ctx.stroke();
+    }
+    if (c.speedT > 0) { ctx.strokeStyle = '#7ee08a88'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, r + 6, 0, 7); ctx.stroke(); }
+    if (c.slowT > 0) { ctx.strokeStyle = '#b39ddb88'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, r + 6, 0, 7); ctx.stroke(); }
+
+    if (c.stealthT > 0) ctx.globalAlpha = 0.5;           // 隐身半透明（自己可见）
+    ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 7);
+    ctx.fillStyle = TEAMCOL[c.team]; ctx.fill();
+    ctx.lineWidth = c.isPlayer ? 3 : 1.5;
+    ctx.strokeStyle = c.isPlayer ? '#fff' : '#0d0f14'; ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Microsoft YaHei"'; ctx.textAlign = 'center';
+    ctx.fillText(ROLES[c.role].face, c.x, c.y + 4);
+    bar(c.x, c.y - r - 16, 44, 5, c.hp / c.maxHp, c.team === 0 ? '#4caf50' : '#ff5252');
+    if (c.shield > 0) {                                  // 护盾条（黄色覆盖）
+      ctx.fillStyle = '#ffd54f';
+      ctx.fillRect(c.x - 22, c.y - r - 17, Math.min(44, 44 * c.shield / c.maxHp), 7);
+    }
+    ctx.fillStyle = '#9aa3b5'; ctx.font = '10px sans-serif';
+    ctx.fillText(`Lv${c.lvl} ${c.name}`, c.x, c.y - r - 22);
+  });
+
+  // 钩绳
+  champs.forEach(c => {
+    if (c.hooked) {
+      ctx.strokeStyle = '#cfa06a'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(c.hooked.by.x, c.hooked.by.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+    }
+  });
+
+  // 特效
+  fx.forEach(f => {
+    if (f.type === 'text') {
+      ctx.globalAlpha = Math.min(1, f.life * 2);
+      ctx.fillStyle = f.color; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(f.txt, f.x, f.y - (1.2 - f.life) * 26);
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'ring') {
+      ctx.globalAlpha = f.life * 3; ctx.strokeStyle = f.color; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1.4 - f.life), 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+    } else if (f.type === 'arc') {                        // 近战挥击扇形
+      ctx.globalAlpha = Math.min(1, f.life * 4);
+      ctx.fillStyle = f.color;
+      ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.arc(f.x, f.y, f.r, f.a1, f.a2); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'slash') {
+      ctx.globalAlpha = f.life * 4; ctx.strokeStyle = f.color; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+  });
+
+  ctx.restore();
+  drawMinimap();
+}
+function bar(x, y, w, h, pct, color) {
+  ctx.fillStyle = '#0d0f14'; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
+  ctx.fillStyle = color; ctx.fillRect(x - w / 2, y, w * clamp(pct, 0, 1), h);
+}
+function drawMinimap() {
+  const sx = mm.width / W, sy = mm.height / H;
+  mctx.fillStyle = '#10131a'; mctx.fillRect(0, 0, mm.width, mm.height);
+  mctx.strokeStyle = '#2a3142'; mctx.lineWidth = 2;
+  LANES.forEach(y => { mctx.beginPath(); mctx.moveTo(0, y * sy); mctx.lineTo(mm.width, y * sy); mctx.stroke(); });
+  WALLS.forEach(w => { mctx.fillStyle = '#4a5470'; mctx.fillRect(w.x * sx, w.y * sy, Math.max(2, w.w * sx), Math.max(2, w.h * sy)); });
+  BUSHES.forEach(b => { mctx.fillStyle = '#2f5c36'; mctx.fillRect(b.x * sx, b.y * sy, b.w * sx, b.h * sy); });
+  towers.forEach(t => { if (t.alive) { mctx.fillStyle = TEAMCOL[t.team]; mctx.fillRect(t.x * sx - 2, t.y * sy - 2, 4, 4); } });
+  crystals.forEach(cr => {
+    mctx.fillStyle = TEAMCOL[cr.team];
+    mctx.save(); mctx.translate(cr.x * sx, cr.y * sy); mctx.rotate(Math.PI / 4); mctx.fillRect(-3.5, -3.5, 7, 7); mctx.restore();
+  });
+  pickups.forEach(p => { mctx.fillStyle = '#cfd6e4'; mctx.fillRect(p.x * sx - 1.5, p.y * sy - 1.5, 3, 3); });
+  champs.forEach(c => {
+    if (c.dead || !seenBy(player, c)) return;
+    mctx.beginPath(); mctx.arc(c.x * sx, c.y * sy, c.isPlayer ? 4 : 3, 0, 7);
+    mctx.fillStyle = TEAMCOL[c.team]; mctx.fill();
+    if (c.isPlayer) { mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.stroke(); }
+  });
+}
+
+/* ================= 主循环 ================= */
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state === 'playing') update(dt);
+  if (state !== 'select') draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
