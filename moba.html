@@ -323,7 +323,7 @@ function mkChamp(role, team, name, idx, isPlayer) {
     vx: 0, vy: 0, aim: team === 0 ? 0 : Math.PI,
     hp: r.hp, maxHp: r.hp, lvl: 1, xp: 0,
     atkCdT: 0, skillCdT: 0,
-    slowT: 0, speedT: 0, sprintT: 0, stealthT: 0, shield: 0, shieldT: 0, hook: false, hooked: null, lastCombat: -99, assistLog: new Map(),
+    slowT: 0, speedT: 0, sprintT: 0, stealthT: 0, shield: 0, shieldT: 0, hook: false, hooked: null, lastCombat: -99, assistLog: new Map(), walkPhase: 0,
     dashT: 0, dashFrom: null, dashTo: null, dashHit: false,
     dead: false, respawnT: 0,
     kills: 0, deaths: 0, dmg: 0,
@@ -439,6 +439,7 @@ function tryAttack(c) {
       life: 0.25, color: c.team === 0 ? 'rgba(158,207,255,0.35)' : 'rgba(255,138,128,0.35)' });
   } else {
     fireProj({ role: c.role, team: c.team, owner: c, psp: r.pSpeed, dmg: cAtk(c), pr: 6, rng: r.range + 60, kind: 'basic' }, c.x, c.y, c.aim);
+    fx.push({ type: 'spark', x: c.x + Math.cos(c.aim) * 15, y: c.y - 18 + Math.sin(c.aim) * 10, ang: c.aim, life: 0.12 });  // 枪口闪光
   }
   c.atkCdT = r.atkCd;
 }
@@ -651,6 +652,7 @@ function update(dt) {
       c.x = c.dashFrom.x + (c.dashTo.x - c.dashFrom.x) * p;
       c.y = c.dashFrom.y + (c.dashTo.y - c.dashFrom.y) * p;
       resolveWalls(c);
+      fx.push({ type: 'ghost', x: c.x, y: c.y, team: c.team, life: 0.3, maxLife: 0.3 });  // 影袭残影
       if (!c.dashHit) {                                   // 突进瞬间结算路径伤害
         c.dashHit = true;
         const dmg = 80 + 18 * c.lvl;
@@ -664,6 +666,7 @@ function update(dt) {
       resolveWalls(c);
     }
 
+    if (Math.hypot(c.vx, c.vy) > 20) c.walkPhase += Math.hypot(c.vx, c.vy) * dt * 0.055;  // 走路摆腿动画相位
     // 脱战回血：脱离战斗 5 秒后每秒恢复 5% 最大生命（战斗中不回复）；泉水无回复，仅作复活点
     if (gameTime - c.lastCombat > 5) c.hp = Math.min(c.maxHp, c.hp + c.maxHp * 0.05 * dt);
     c.inBush = BUSHES.some(b => inRect(c, b));           // 是否处于草丛（经验只来自击杀，无被动成长）
@@ -734,6 +737,7 @@ function update(dt) {
           if (h > 1) {
             c.hp += h;
             fx.push({ type: 'text', x: c.x, y: c.y - 24, txt: '+' + Math.round(h), color: '#7ee08a', life: 0.8 });
+            fx.push({ type: 'healspark', x: c.x, y: c.y - 20, life: 0.6 });   // 治疗光点
             if (!p.pierce) { dead = true; break; }              // 辅助普攻被友军"接住"
           }
         }
@@ -763,6 +767,12 @@ function update(dt) {
     if (tg.t >= tg.dur) {
       champs.forEach(c => { if (!c.dead && c.team !== tg.team && dist(c, tg) < tg.r + ROLES[c.role].r) { hurtChamp(c, tg.dmg, tg.owner); c.slowT = 1.5; } });
       fx.push({ type: 'ring', x: tg.x, y: tg.y, r: tg.r, life: 0.35, color: '#ffb74d' });
+      const cl = [];                                           // 地面裂纹
+      for (let k = 0; k < 7; k++) {
+        const a2 = Math.random() * 6.28, r1 = tg.r * 0.3, r2 = tg.r * (0.75 + Math.random() * 0.35);
+        cl.push([Math.cos(a2) * r1, Math.sin(a2) * r1, Math.cos(a2) * r2, Math.sin(a2) * r2]);
+      }
+      fx.push({ type: 'crack', x: tg.x, y: tg.y, lines: cl, life: 0.6 });
       telegraphs.splice(i, 1);
     }
   }
@@ -896,49 +906,72 @@ function draw() {
 
   // 弹道
   projs.forEach(p => {
-    if (p.kind === 'arrow') {
-      ctx.strokeStyle = '#ffe082'; ctx.lineWidth = 6;
-      ctx.beginPath(); ctx.moveTo(p.x - p.vx * 0.03, p.y - p.vy * 0.03); ctx.lineTo(p.x, p.y); ctx.stroke();
-    } else if (p.kind === 'wave') {
-      ctx.fillStyle = 'rgba(255,241,118,0.30)';
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
-      ctx.strokeStyle = '#fff59d'; ctx.lineWidth = 2; ctx.stroke();
-    } else if (p.kind === 'tower') {
+    const ang = Math.atan2(p.vy, p.vx);
+    if (p.kind === 'arrow') {                              // 穿云箭：发光长箭
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang);
+      ctx.shadowColor = '#ffe082'; ctx.shadowBlur = 14;
+      ctx.strokeStyle = '#ffe082'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-22, 0); ctx.lineTo(8, 0); ctx.stroke();
+      ctx.fillStyle = '#fff3c4';
+      ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(4, -4.5); ctx.lineTo(4, 4.5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#ffca28'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-22, 0); ctx.lineTo(-16, -4); ctx.moveTo(-22, 0); ctx.lineTo(-16, 4);
+      ctx.stroke(); ctx.restore();
+    } else if (p.kind === 'wave') {                        // 圣光波：双层脉动光环
+      const pr = p.r + Math.sin(gameTime * 22) * 3;
+      ctx.save(); ctx.shadowColor = '#fff59d'; ctx.shadowBlur = 16;
+      ctx.fillStyle = 'rgba(255,241,118,0.25)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, pr, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#fff59d'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(p.x, p.y, pr, 0, 7); ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, pr * 0.55, 0, 7); ctx.stroke();
+      ctx.restore();
+    } else if (p.kind === 'hook') {                        // 钩头
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang);
+      ctx.fillStyle = '#cfa06a';
+      ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else if (p.kind === 'tower') {                       // 塔弹：橙光球
+      ctx.save(); ctx.shadowColor = '#ffab40'; ctx.shadowBlur = 10;
       ctx.fillStyle = '#ffab40'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
-    } else {
-      ctx.fillStyle = p.team === player.team ? '#9ecfff' : '#ff8a80';
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+      ctx.restore();
+    } else {                                               // 普攻弹：拖尾光弹
+      ctx.strokeStyle = p.team === player.team ? 'rgba(158,207,255,0.6)' : 'rgba(255,138,128,0.6)';
+      ctx.lineWidth = p.r * 1.6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(p.x - p.vx * 0.022, p.y - p.vy * 0.022); ctx.lineTo(p.x, p.y); ctx.stroke();
+      ctx.fillStyle = p.team === player.team ? '#d8ecff' : '#ffc2bb';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.75, 0, 7); ctx.fill();
     }
   });
 
-  // 英雄
+  // 英雄（火柴人建模）
   champs.forEach(c => {
-    if (c.dead || !seenBy(player, c)) return;            // 草丛中的敌人不渲染
-    const r = ROLES[c.role].r;
+    if (c.dead || !seenBy(player, c)) return;
+    const rd = ROLES[c.role], s = rd.r / 15;
     if (c.isPlayer) {                                     // 瞄准线
-      const rl = ROLES[c.role].meleeR || ROLES[c.role].range;
+      const rl = rd.meleeR || rd.range;
       ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(c.x, c.y);
       ctx.lineTo(c.x + Math.cos(c.aim) * rl, c.y + Math.sin(c.aim) * rl); ctx.stroke();
     }
-    if (c.speedT > 0) { ctx.strokeStyle = '#7ee08a88'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, r + 6, 0, 7); ctx.stroke(); }
-    if (c.slowT > 0) { ctx.strokeStyle = '#b39ddb88'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, r + 6, 0, 7); ctx.stroke(); }
+    if (c.speedT > 0 || c.sprintT > 0) { ctx.strokeStyle = '#7ee08a88'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, 16 * s, 0, 7); ctx.stroke(); }
+    if (c.slowT > 0) { ctx.strokeStyle = '#b39ddb88'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, 16 * s, 0, 7); ctx.stroke(); }
 
-    if (c.stealthT > 0) ctx.globalAlpha = 0.5;           // 隐身半透明（自己可见）
-    ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 7);
-    ctx.fillStyle = TEAMCOL[c.team]; ctx.fill();
-    ctx.lineWidth = c.isPlayer ? 3 : 1.5;
-    ctx.strokeStyle = c.isPlayer ? '#fff' : '#0d0f14'; ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Microsoft YaHei"'; ctx.textAlign = 'center';
-    ctx.fillText(ROLES[c.role].face, c.x, c.y + 4);
-    bar(c.x, c.y - r - 16, 44, 5, c.hp / c.maxHp, c.team === 0 ? '#4caf50' : '#ff5252');
+    if (c.isPlayer) { ctx.save(); ctx.shadowColor = '#ffffff55'; ctx.shadowBlur = 12; }
+    ctx.save(); ctx.translate(c.x, c.y);
+    drawStickman(c, c.stealthT > 0 ? 0.55 : 1);
+    ctx.restore();
+    if (c.isPlayer) ctx.restore();
+
+    bar(c.x, c.y - 40 * s, 44, 5, c.hp / c.maxHp, c.team === 0 ? '#4caf50' : '#ff5252');
     if (c.shield > 0) {                                  // 护盾条（黄色覆盖）
       ctx.fillStyle = '#ffd54f';
-      ctx.fillRect(c.x - 22, c.y - r - 17, Math.min(44, 44 * c.shield / c.maxHp), 7);
+      ctx.fillRect(c.x - 22, c.y - 41 * s, Math.min(44, 44 * c.shield / c.maxHp), 7);
     }
-    ctx.fillStyle = '#9aa3b5'; ctx.font = '10px sans-serif';
-    ctx.fillText(`Lv${c.lvl} ${c.name}`, c.x, c.y - r - 22);
+    ctx.fillStyle = '#9aa3b5'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`Lv${c.lvl} ${c.name}`, c.x, c.y - 46 * s);
   });
 
   // 钩绳
@@ -959,10 +992,49 @@ function draw() {
     } else if (f.type === 'ring') {
       ctx.globalAlpha = f.life * 3; ctx.strokeStyle = f.color; ctx.lineWidth = 5;
       ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1.4 - f.life), 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
-    } else if (f.type === 'arc') {                        // 近战挥击扇形
-      ctx.globalAlpha = Math.min(1, f.life * 4);
+    } else if (f.type === 'arc') {                        // 近战挥击：三层流光扇形
+      const p = 1 - f.life / 0.25, sweep = f.a2 - f.a1;
+      ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(p * 0.25);
+      ctx.globalAlpha = 0.22 * (f.life / 0.25);
       ctx.fillStyle = f.color;
-      ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.arc(f.x, f.y, f.r, f.a1, f.a2); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, f.r, f.a1, f.a2); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = Math.min(1, f.life * 4);
+      ctx.strokeStyle = f.color; ctx.lineCap = 'round';
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.arc(0, 0, f.r * 0.92, f.a1 + sweep * p * 0.2, f.a2 + sweep * p * 0.2); ctx.stroke();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#ffffffcc';
+      ctx.beginPath(); ctx.arc(0, 0, f.r * 0.98, f.a1 + sweep * p * 0.3, f.a2 + sweep * p * 0.3); ctx.stroke();
+      ctx.restore(); ctx.globalAlpha = 1;
+    } else if (f.type === 'ghost') {                      // 影袭残影
+      ctx.globalAlpha = (f.life / f.maxLife) * 0.4;
+      ctx.strokeStyle = TEAMCOL[f.team]; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(f.x, f.y - 25, 5.5, 0, 7); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(f.x, f.y - 21); ctx.lineTo(f.x, f.y - 13);
+      ctx.moveTo(f.x, f.y - 13); ctx.lineTo(f.x - 4, f.y);
+      ctx.moveTo(f.x, f.y - 13); ctx.lineTo(f.x + 4, f.y);
+      ctx.stroke(); ctx.globalAlpha = 1;
+    } else if (f.type === 'spark') {                      // 枪口闪光
+      ctx.globalAlpha = Math.min(1, f.life / 0.12);
+      ctx.strokeStyle = '#fff8e1'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      for (let k = -1; k <= 1; k++) {
+        const a2 = f.ang + k * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(f.x + Math.cos(a2) * 6, f.y + Math.sin(a2) * 6);
+        ctx.lineTo(f.x + Math.cos(a2) * 14, f.y + Math.sin(a2) * 14);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'crack') {                      // 震地裂纹
+      ctx.globalAlpha = Math.min(1, f.life * 2.5);
+      ctx.strokeStyle = '#8a5a2b'; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      f.lines.forEach(([x1, y1, x2, y2]) => { ctx.moveTo(f.x + x1, f.y + y1); ctx.lineTo(f.x + x2, f.y + y2); });
+      ctx.stroke(); ctx.globalAlpha = 1;
+    } else if (f.type === 'healspark') {                  // 治疗光点
+      ctx.globalAlpha = Math.min(1, f.life * 2);
+      ctx.fillStyle = '#7ee08a'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('✚', f.x + (0.6 - f.life) * 14, f.y - (0.6 - f.life) * 30);
       ctx.globalAlpha = 1;
     } else if (f.type === 'slash') {
       ctx.globalAlpha = f.life * 4; ctx.strokeStyle = f.color; ctx.lineWidth = 10;
@@ -973,6 +1045,73 @@ function draw() {
   ctx.restore();
   drawMinimap();
 }
+// 火柴人：头部+躯干+四肢，带走路摆腿、出手后坐、职业武器（需先 translate 到角色脚下）
+function drawStickman(c, alpha) {
+  const rd = ROLES[c.role], s = rd.r / 15;
+  const teamCol = TEAMCOL[c.team];
+  const dark = c.team === 0 ? '#173f75' : '#6e1a1a';
+  const moving = Math.hypot(c.vx, c.vy) > 20;
+  const swing = moving ? Math.sin(c.walkPhase) * 6 * s : 0;
+  const armSwing = moving ? Math.sin(c.walkPhase) * 3.5 * s : 0;
+  const recoil = c.atkCdT > rd.atkCd - 0.18 ? 4 * s : 0;     // 出手后坐
+  const ax = Math.cos(c.aim), ay = Math.sin(c.aim);
+  const lw = (c.role === 'tank' ? 4.6 : 3.4) * s;
+
+  ctx.globalAlpha = alpha;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = teamCol; ctx.lineWidth = lw;
+
+  // 双腿
+  ctx.beginPath();
+  ctx.moveTo(0, -13 * s); ctx.lineTo(-2 * s + swing * 0.5, -6.5 * s); ctx.lineTo(-4 * s + swing, 0);
+  ctx.moveTo(0, -13 * s); ctx.lineTo(2 * s - swing * 0.5, -6.5 * s); ctx.lineTo(4 * s - swing, 0);
+  ctx.stroke();
+
+  // 躯干
+  ctx.beginPath(); ctx.moveTo(0, -21 * s); ctx.lineTo(0, -13 * s); ctx.stroke();
+
+  // 持械臂（指向瞄准方向）
+  const shy = -19.5 * s;
+  const hx = ax * (9 * s - recoil), hy = shy + ay * (9 * s - recoil) * 0.7;
+  ctx.beginPath(); ctx.moveTo(0, shy); ctx.lineTo(hx, hy); ctx.stroke();
+
+  // 副手臂（随走路摆动）
+  ctx.beginPath(); ctx.moveTo(0, shy); ctx.lineTo(-4 * s - armSwing, -13.5 * s); ctx.stroke();
+
+  // 头
+  ctx.beginPath(); ctx.arc(0, -25.5 * s, 5.5 * s, 0, 7);
+  ctx.fillStyle = teamCol; ctx.fill();
+  ctx.lineWidth = 1.6 * s; ctx.strokeStyle = dark; ctx.stroke();
+  if (c.isPlayer) { ctx.beginPath(); ctx.arc(0, -25.5 * s, 6.8 * s, 0, 7); ctx.strokeStyle = '#ffffffcc'; ctx.lineWidth = 1.4; ctx.stroke(); }
+
+  // 武器
+  const wtx = hx + ax * 4 * s, wty = hy + ay * 4 * s;
+  if (c.role === 'marksman') {                               // 弓
+    ctx.save(); ctx.translate(wtx, wty); ctx.rotate(c.aim);
+    ctx.strokeStyle = '#cfd6e4'; ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.arc(0, 0, 6.5 * s, -1.2, 1.2); ctx.stroke();
+    ctx.strokeStyle = '#9aa3b5'; ctx.lineWidth = 1 * s;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(-1.2) * 6.5 * s, Math.sin(-1.2) * 6.5 * s);
+    ctx.lineTo(Math.cos(1.2) * 6.5 * s, Math.sin(1.2) * 6.5 * s);
+    ctx.stroke(); ctx.restore();
+  } else if (c.role === 'assassin') {                        // 双匕首
+    ctx.strokeStyle = '#e3e8f2'; ctx.lineWidth = 2.6 * s;
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(wtx, wty); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-4 * s - armSwing, -13.5 * s); ctx.lineTo(-4 * s - armSwing - 6 * s, -10 * s); ctx.stroke();
+  } else if (c.role === 'tank') {                            // 盾牌
+    ctx.beginPath(); ctx.arc(-6 * s, -15 * s, 6.5 * s, 0, 7);
+    ctx.fillStyle = dark; ctx.fill();
+    ctx.strokeStyle = '#cfd6e4'; ctx.lineWidth = 1.6 * s; ctx.stroke();
+  } else {                                                   // 辅助法杖（顶端发光）
+    ctx.strokeStyle = '#d9b96c'; ctx.lineWidth = 2 * s;
+    ctx.beginPath(); ctx.moveTo(hx - ax * 5 * s, hy - ay * 5 * s + 6 * s); ctx.lineTo(wtx + ax * 3 * s, wty + ay * 3 * s); ctx.stroke();
+    ctx.beginPath(); ctx.arc(wtx + ax * 3 * s, wty + ay * 3 * s, 2.8 * s, 0, 7);
+    ctx.fillStyle = '#fff59d'; ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
 function bar(x, y, w, h, pct, color) {
   ctx.fillStyle = '#0d0f14'; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
   ctx.fillStyle = color; ctx.fillRect(x - w / 2, y, w * clamp(pct, 0, 1), h);
