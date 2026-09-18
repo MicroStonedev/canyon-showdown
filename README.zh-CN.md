@@ -4,11 +4,15 @@
 
 纯原生 HTML + CSS + JavaScript 实现的 5v5 推塔对战游戏，零依赖、单文件，浏览器打开即玩。
 
+**在线试玩**：https://microstonedev.github.io/canyon-showdown/
+
 ## 游戏文件
 
 | 文件 | 说明 |
 |---|---|
+| `index.html` | 落地页（GitHub Pages 入口） |
 | `moba.html` | 峡谷对决（5v5 MOBA 推塔对战） |
+| `champions.html` | 英雄卡通建模设计图 |
 
 ## 怎么玩
 
