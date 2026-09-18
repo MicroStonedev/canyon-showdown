@@ -4,7 +4,7 @@
 
 纯原生 HTML + CSS + JavaScript 实现的 5v5 推塔对战游戏，零依赖、单文件，浏览器打开即玩。
 
-**在线试玩**：https://microstonedev.github.io/team-repo/
+**在线试玩**：https://microstonedev.github.io/canyon-showdown/
 
 ## 游戏文件
 

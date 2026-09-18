@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 A 5v5 tower-pushing battle game built with pure native HTML + CSS + JavaScript. Zero dependencies, single file — open it in a browser and play.
 
-**Play online:** https://microstonedev.github.io/team-repo/
+**Play online:** https://microstonedev.github.io/canyon-showdown/
 
 ## Game Files
 
