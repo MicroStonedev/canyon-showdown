@@ -1,54 +1,56 @@
-# 峡谷对决 - 网页 5v5 MOBA 小游戏
+English | [简体中文](README.zh-CN.md)
 
-纯原生 HTML + CSS + JavaScript 实现的 5v5 推塔对战游戏，零依赖、单文件，浏览器打开即玩。
+# Canyon Showdown - Web-based 5v5 MOBA Game
 
-## 游戏文件
+A 5v5 tower-pushing battle game built with pure native HTML + CSS + JavaScript. Zero dependencies, single file — open it in a browser and play.
 
-| 文件 | 说明 |
+## Game Files
+
+| File | Description |
 |---|---|
-| `moba.html` | 峡谷对决（5v5 MOBA 推塔对战） |
+| `moba.html` | Canyon Showdown (5v5 MOBA tower-push battle) |
 
-## 怎么玩
+## How to Play
 
-双击 `moba.html` 用浏览器打开即可，无需安装任何东西，也无需本地服务器。
+Double-click `moba.html` to open it in your browser — nothing to install, no local server needed.
 
-## 峡谷对决玩法
+## Gameplay
 
-### 操作
+### Controls
 
-- `W A S D` — 移动
-- `鼠标` — 瞄准
-- `左键` — 普通攻击（可长按）
-- `右键` — 释放技能（3 级解锁）
-- `Q` — 使用道具（钩子）
+- `W A S D` — Move
+- `Mouse` — Aim
+- `Left click` — Basic attack (hold to keep attacking)
+- `Right click` — Cast skill (unlocks at level 3)
+- `Q` — Use item (hook)
 
-### 规则
+### Rules
 
-- 5v5 对战：你 + 4 名 AI 队友 对阵 5 名 AI 敌人
-- 摧毁敌方水晶获胜；三路，每路一座防御塔
-- **经验只来自击败敌方英雄**：击杀 120 经验，助攻 60（需在目标死亡前 8 秒内对其造成过伤害）
-- 升级提升生命、普攻和技能伤害，3 级解锁技能，最高 9 级
-- 脱离战斗 5 秒后每秒回复 5% 生命；泉水仅作复活点
-- 所有攻击均为非指向性弹道，可以走位躲避；岩石阻挡移动与弹道，草丛提供隐身
+- 5v5 match: you + 4 AI teammates vs 5 AI enemies
+- Win by destroying the enemy crystal; three lanes with one turret per lane
+- **XP only comes from defeating enemy heroes**: 120 XP per kill, 60 per assist (you must have damaged the target within 8 seconds before it died)
+- Leveling up increases HP, basic attack, and skill damage; skills unlock at level 3, max level 9
+- Regenerate 5% HP per second after being out of combat for 5 seconds; the fountain only serves as a respawn point
+- All attacks are non-targeted projectiles that can be dodged by moving; rocks block movement and projectiles, bushes grant stealth
 
-### 四个角色
+### Four Roles
 
-| 角色 | 特点 | 技能 |
+| Role | Traits | Skill |
 |---|---|---|
-| 🏹 射手 | 远程弹道、高攻速 | 穿云箭：超远穿透箭 |
-| 🗡️ 刺客 | 近战 1/8 圆窄判定、高爆发、不能隔墙攻击 | 影袭：突进（撞墙即停） |
-| 🛡️ 肉盾 | 近战整圆范围、厚血 | 震地：范围伤害+减速 |
-| ✚ 辅助 | 远程弹道，普攻打到队友会治疗 | 圣光波：伤害敌人并治疗途经友军 |
+| 🏹 Marksman | Long-range projectiles, high attack speed | Piercing Arrow: extra-long piercing shot |
+| 🗡️ Assassin | Melee with a narrow 1/8-circle hitbox, high burst, cannot attack through walls | Shadow Strike: dash (stops on hitting a wall) |
+| 🛡️ Tank | Melee full-circle area damage, thick HP | Earthshatter: area damage + slow |
+| ✚ Support | Ranged projectiles; basic attacks that hit allies heal them | Holy Wave: damages enemies and heals friendly units in its path |
 
-### 场上道具（随机刷新）
+### Field Items (random spawns)
 
-❤️ 血包 · 🛡️ 护盾 · 👻 隐身 · 👟 疾跑 · 🪝 钩子（Q 发射，把敌人勾到身前）
+❤️ Health pack · 🛡️ Shield · 👻 Invisibility · 👟 Speed boost · 🪝 Hook (fire with Q to drag an enemy to you)
 
-## 技术说明
+## Technical Notes
 
-- 单 HTML 文件，Canvas 2D 渲染，`requestAnimationFrame` 主循环
-- AI 具备走位躲弹道、绕岩石、残血拉扯、抢道具、出钩等行为
-- 无任何外部库、无构建步骤、无网络请求
+- Single HTML file, Canvas 2D rendering, `requestAnimationFrame` main loop
+- AI behavior includes dodging projectiles, pathing around rocks, retreating at low HP, grabbing items, and throwing hooks
+- No external libraries, no build step, no network requests
 
 ## License
 
