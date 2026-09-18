@@ -183,30 +183,29 @@
 <script>
 'use strict';
 /* ================= 基础配置 ================= */
-const W = 2400, H = 1200;                 // 世界尺寸
-const LANES = [200, 600, 1000];           // 上 / 中 / 下三路
+const W = 2000, H = 900;                  // 世界尺寸（更长的横向战场）
+const LANES = [225, 675];                 // 上 / 下两路
 const TEAMCOL = ['#3f8cff', '#ff5252'];
-const TOWER = { hp: 1050, range: 330, dmg: 90, cd: 0.92, projSpeed: 400, r: 22 };
-const CRYSTAL = { hp: 3150, r: 34 };
+const TOWER = { hp: 2600, range: 330, dmg: 110, cd: 0.92, projSpeed: 400, r: 22 };
+const CRYSTAL = { hp: 8000, r: 34, range: 380, dmg: 85, cd: 1.0 };
 
-// 岩石墙体：阻挡移动与弹道；蓝方侧定义，红方侧按中心对称（旋转180°）生成，保证两边绝对公平
+// 岩石墙体：两路布局；蓝方侧定义，红方侧按中心对称（旋转180°）生成，保证两边绝对公平
 const WALLS_BLUE = [
-  { x: 410, y: 330, w: 150, h: 54 }, { x: 880, y: 390, w: 170, h: 52 },   // 上野区
-  { x: 410, y: 816, w: 150, h: 54 }, { x: 880, y: 758, w: 170, h: 52 },   // 下野区（上下镜像）
+  { x: 380, y: 300, w: 130, h: 54 }, { x: 620, y: 350, w: 130, h: 52 },   // 两路之间野区
+  { x: 380, y: 546, w: 130, h: 54 }, { x: 620, y: 498, w: 130, h: 52 },   // （上下镜像）
 ];
 const WALLS_MID = [
-  { x: 1178, y: 320, w: 44, h: 190 }, { x: 1178, y: 690, w: 44, h: 190 }, // 河道口岩石，天然居中自对称
+  { x: 978, y: 130, w: 44, h: 190 }, { x: 978, y: 580, w: 44, h: 190 },   // 河道口岩石
 ];
 const mirror = a => [...a, ...a.map(t => ({ x: W - t.x - t.w, y: H - t.y - t.h, w: t.w, h: t.h }))];
 const WALLS = [...mirror(WALLS_BLUE), ...WALLS_MID];
 
-// 草丛：围绕防御塔布置——每座塔前方两丛夹道（蹲守/越塔点），中路河道口与基地出口各两丛，同样中心对称
+// 草丛：围绕防御塔与河道布置——每座塔前方两丛夹道（蹲守/越塔点），河道口与基地出口各一丛，中心对称
 const BUSHES_BLUE = [
-  { x: 610, y: 88,   w: 120, h: 64 }, { x: 610, y: 244,  w: 120, h: 64 }, // 上路塔前
-  { x: 610, y: 488,  w: 120, h: 64 }, { x: 610, y: 648,  w: 120, h: 64 }, // 中路塔前
-  { x: 610, y: 892,  w: 120, h: 64 }, { x: 610, y: 1048, w: 120, h: 64 }, // 下路塔前
-  { x: 960, y: 492,  w: 120, h: 60 }, { x: 960, y: 648,  w: 120, h: 60 }, // 中路河道口
-  { x: 300, y: 470,  w: 110, h: 70 }, { x: 300, y: 660,  w: 110, h: 70 }, // 基地出口
+  { x: 450, y: 115,  w: 120, h: 64 }, { x: 450, y: 271,  w: 120, h: 64 }, // 上路塔前上下
+  { x: 450, y: 565,  w: 120, h: 64 }, { x: 450, y: 721,  w: 120, h: 64 }, // 下路塔前上下
+  { x: 640, y: 390,  w: 120, h: 60 },                                     // 河道口
+  { x: 250, y: 385,  w: 110, h: 70 },                                     // 基地出口
 ];
 const BUSHES = mirror(BUSHES_BLUE);
 
@@ -334,9 +333,9 @@ const PICKUP_KINDS = [
 ];
 function randomPickupPos() {
   for (let i = 0; i < 30; i++) {
-    const x = 150 + Math.random() * 2100, y = 120 + Math.random() * 960;
+    const x = 150 + Math.random() * 1700, y = 100 + Math.random() * 700;
     if (WALLS.some(w => circleRectHit(x, y, 36, w))) continue;
-    if (Math.hypot(x - 120, y - 600) < 230 || Math.hypot(x - 2280, y - 600) < 230) continue;  // 避开泉水
+    if (Math.hypot(x - 120, y - 450) < 230 || Math.hypot(x - 1880, y - 450) < 230) continue;  // 避开泉水
     if (pickups.some(p => Math.hypot(p.x - x, p.y - y) < 100)) continue;
     return { x, y };
   }
@@ -368,8 +367,10 @@ function applyPickup(c, p) {
   else if (roll === 1) { c.maxHp += 80; c.hp += 80; if (c.isPlayer) feed(CN() ? '⚒️ 属性锻造器：生命 +80' : '⚒️ Forge: +80 HP', '#ffd54f'); }
   else { c.moveBonus += 15; if (c.isPlayer) feed(CN() ? '⚒️ 属性锻造器：移速 +15' : '⚒️ Forge: +15 MS', '#ffd54f'); }
   }
-  fx.push({ type: 'text', x: c.x, y: c.y - 44, txt: p.ico + ' ' + info.name, color: '#ffffff', life: 1 });
-  if (c.isPlayer) feed(`拾取 ${p.ico}【${CN() ? info.name : info.en}】${CN() ? info.desc : info.dEn}`);
+  if (info) {
+    fx.push({ type: 'text', x: c.x, y: c.y - 44, txt: p.ico + ' ' + info.name, color: '#ffffff', life: 1 });
+    if (c.isPlayer) feed(`拾取 ${p.ico}【${CN() ? info.name : info.en}】${CN() ? info.desc : info.dEn}`);
+  }
 }
 // 钩子：Q 发射的直线弹道，命中敌方英雄后将其拉到身前
 function fireHook(c, ang) {
@@ -386,16 +387,16 @@ function tryHook(c, forcedAng) {
 }
 
 const ROLES = {
-  marksman: { cn:'射手', en:'Marksman', face:'🏹', hp:385, hpL:49,  atk:38, atkL:6, atkCd:0.46, range:300, pSpeed:520, move:230, r:15,
+  marksman: { cn:'射手', en:'Marksman', face:'🏹', hp:385, hpL:49,  atk:38, atkL:6, atkCd:0.46, range:300, pSpeed:520, move:205, r:15,
     skill:{ name:'穿云箭', en:'Piercing Arrow', cd:8,  ico:'➹', desc:'直线穿透长箭，命中路径上所有敌人',
       dEn:'A long piercing bolt that strikes every enemy in its path' } },
-  assassin: { cn:'刺客', en:'Assassin', face:'🗡️', hp:350, hpL:42,  atk:78, atkL:14, atkCd:0.70, range:80, meleeR:75, meleeArc:0.125, pSpeed:560, move:265, r:15,
+  assassin: { cn:'刺客', en:'Assassin', face:'🗡️', hp:350, hpL:42,  atk:78, atkL:14, atkCd:0.70, range:80, meleeR:75, meleeArc:0.125, pSpeed:560, move:215, r:15,
     skill:{ name:'影袭', en:'Shadow Dash', cd:10, ico:'💫', desc:'向瞄准方向突进，对路径敌人造成伤害并短暂加速',
       dEn:'Dash toward the aim direction, damaging enemies along the path' } },
-  tank:     { cn:'肉盾', en:'Tank', face:'🛡️', hp:595, hpL:77,  atk:26, atkL:4, atkCd:0.80, range:105, meleeR:100, pSpeed:420, move:205, r:18,
+  tank:     { cn:'肉盾', en:'Tank', face:'🛡️', hp:595, hpL:77,  atk:26, atkL:4, atkCd:0.80, range:105, meleeR:100, pSpeed:420, move:180, r:18,
     skill:{ name:'震地', en:'Seismic Slam', cd:12, ico:'💥', desc:'0.6秒后重击周围大地，伤害并减速敌人',
       dEn:'After 0.6s slam the ground, damaging and slowing nearby enemies' } },
-  support:  { cn:'辅助', en:'Support', face:'✚',  hp:434, hpL:55,  atk:30, atkL:5, atkCd:0.60, range:280, pSpeed:480, move:225, r:15,
+  support:  { cn:'辅助', en:'Support', face:'✚',  hp:434, hpL:55,  atk:30, atkL:5, atkCd:0.60, range:280, pSpeed:480, move:200, r:15,
     skill:{ name:'圣光波', en:'Light Wave', cd:11, ico:'🌟', desc:'放出宽幅光波：伤害敌人、治疗途经的友军',
       dEn:'A wide light wave that damages enemies and heals allies it passes through' } },
 };
@@ -547,7 +548,7 @@ buildRoleCards();
 /* ================= 世界初始化 ================= */
 function mkChamp(role, team, name, idx, isPlayer) {
   const r = ROLES[role];
-  const sx = team === 0 ? 120 : 2280, sy = 600;
+    const sx = team === 0 ? 120 : 1880, sy = 450;
   return {
     role, team, name, isPlayer: !!isPlayer,
     x: sx + (team === 0 ? idx * 34 : -idx * 34), y: sy + (idx - 2) * 40,
@@ -559,7 +560,7 @@ function mkChamp(role, team, name, idx, isPlayer) {
     dashT: 0, dashFrom: null, dashTo: null, dashHit: false,
     dead: false, respawnT: 0,
     kills: 0, deaths: 0, dmg: 0,
-    ai: { lane: idx % 3, t: Math.random() * 10, ph: Math.random() * 6.28, st: 'push' },
+    ai: { lane: idx % 2, t: Math.random() * 10, ph: Math.random() * 6.28, st: 'push' },
   };
 }
 
@@ -581,12 +582,14 @@ function initWorld(playerRole) {
   player = champs[0];
 
   LANES.forEach(y => {
-    towers.push({ team: 0, x: 520,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });
-    towers.push({ team: 1, x: 1880, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });
+    towers.push({ team: 0, x: 450,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 蓝方外塔
+    towers.push({ team: 0, x: 750,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 蓝方内塔
+    towers.push({ team: 1, x: 1250, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 红方内塔
+    towers.push({ team: 1, x: 1550, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 红方外塔
   });
   crystals = [
-    { team: 0, x: 170,  y: 600, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp },
-    { team: 1, x: 2230, y: 600, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp },
+    { team: 0, x: 170,  y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0 },
+    { team: 1, x: 1830, y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0 },
   ];
 
   champs.forEach(c => { c.baseMaxHp = c.maxHp; });      // 坦克引擎按初始生命百分比叠层
@@ -733,7 +736,7 @@ function trySkill(c, forcedAng) {
 }
 
 /* ================= 伤害 / 经验 / 死亡 ================= */
-const xpNeed = l => l * 120;
+const xpNeed = l => l * 100;
 function giveXp(c, amt) {
   if (c.lvl >= 9) return;
   c.xp += amt;
@@ -795,12 +798,12 @@ function hurtChamp(c, dmg, src) {
     }
     teamKills[src ? src.team : 1 - c.team]++;
     const participants = [];
-    if (src) { src.kills++; giveXp(src, 120); participants.push(src);
+    if (src) { src.kills++; giveXp(src, 170); participants.push(src);
       // 助攻：目标死亡前 8 秒内对其造成过伤害的队友才能获得经验（与距离无关）
       champs.forEach(a => {
         if (a === src || a.dead || a.team !== src.team) return;
         const t = c.assistLog.get(a);
-        if (t !== undefined && gameTime - t <= 8) { giveXp(a, 60); participants.push(a); }
+        if (t !== undefined && gameTime - t <= 8) { giveXp(a, 85); participants.push(a); }
       });
     }
     participants.forEach(a => {                           // 击杀/参与击杀的海克斯结算
@@ -879,7 +882,7 @@ function dodgeVec(c) {
 }
 function updateBot(c, dt) {
   const a = c.ai; a.t += dt;
-  const home = { x: c.team === 0 ? 120 : 2280, y: 600 };   // 复活点（泉水已无回复）
+  const home = { x: c.team === 0 ? 120 : 1880, y: 450 };   // 复活点（泉水已无回复）
   if (c.hp < c.maxHp * 0.22) a.st = 'retreat';
   if (a.st === 'retreat') {
     if (c.hp > c.maxHp * 0.5) a.st = 'push';
@@ -915,12 +918,12 @@ function updateBot(c, dt) {
     c.aim = isStruct ? ang : leadAim(c, tgt);
     c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c);
     if (td <= range * 1.05) tryAttack(c);
-  } else {                                               // 沿本路推进
-    const laneY = LANES[a.lane], dir = c.team === 0 ? 1 : -1;
-    const towerX = c.team === 0 ? 1880 : 520;
+  } else {                                               // 沿本路向敌方水晶推进
+    const laneY = LANES[a.lane];
+    const goalX = c.team === 0 ? 1830 : 170;
     let px, py;
-    if (dir * (towerX - c.x) > 60) { px = c.x + dir * 140; py = laneY + Math.sin(a.t * 1.6 + a.ph) * 46; }
-    else { px = c.team === 0 ? 2230 : 170; py = 600; }
+    if (Math.abs(goalX - c.x) > 80) { px = c.x + Math.sign(goalX - c.x) * 140; py = laneY + Math.sin(a.t * 1.6 + a.ph) * 46; }
+    else { px = goalX; py = 450; }
     let ang = Math.atan2(py - c.y, px - c.x); ang = avoidAngle(c.x, c.y, ang);
     c.aim = ang; c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c);
   }
@@ -949,7 +952,7 @@ function update(dt) {
       c.respawnT -= dt;
       if (c.respawnT <= 0) {
         c.dead = false; c.hp = c.maxHp; c.ai.st = 'push';
-        c.x = c.team === 0 ? 120 : 2280; c.y = 600 + (Math.random() * 80 - 40);
+        c.x = c.team === 0 ? 120 : 1880; c.y = 450 + (Math.random() * 80 - 40);
       }
       return;
     }
@@ -1040,6 +1043,21 @@ function update(dt) {
         projs.push({ x: t.x, y: t.y - 64, vx: Math.cos(ang) * TOWER.projSpeed, vy: Math.sin(ang) * TOWER.projSpeed,
           team: t.team, owner: null, dmg: TOWER.dmg, r: 8, pierce: false, range: TOWER.range + 120, travel: 0, hit: new Set(), kind: 'tower' });
         t.cd = TOWER.cd;
+      }
+    }
+  });
+
+  // 水晶也发起攻击：射向范围内的敌方英雄
+  crystals.forEach(cr => {
+    cr.cd = Math.max(0, (cr.cd || 0) - dt);
+    if (cr.cd <= 0) {
+      let best = null, bd = CRYSTAL.range;
+      champs.forEach(c => { if (!c.dead && c.team !== cr.team) { const d = dist(c, cr); if (d < bd) { bd = d; best = c; } } });
+      if (best) {
+        const tt = bd / TOWER.projSpeed, ang = Math.atan2(best.y + best.vy * tt * 0.7 - cr.y, best.x + best.vx * tt * 0.7 - cr.x);
+        projs.push({ x: cr.x, y: cr.y - 14, vx: Math.cos(ang) * TOWER.projSpeed, vy: Math.sin(ang) * TOWER.projSpeed,
+          team: cr.team, owner: null, dmg: CRYSTAL.dmg, r: 9, pierce: false, range: CRYSTAL.range + 120, travel: 0, hit: new Set(), kind: 'tower' });
+        cr.cd = CRYSTAL.cd;
       }
     }
   });
@@ -1210,12 +1228,12 @@ function draw() {
     }
 
   // 中央河道（水面微光）
-  ctx.fillStyle = '#48756f'; ctx.fillRect(1140, vy, 120, vh);
-  ctx.fillStyle = '#52817a'; ctx.fillRect(1156, vy, 88, vh);
+  ctx.fillStyle = '#48756f'; ctx.fillRect(940, vy, 120, vh);
+  ctx.fillStyle = '#52817a'; ctx.fillRect(956, vy, 88, vh);
   ctx.strokeStyle = 'rgba(220,245,240,0.14)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
   for (let wy = vy - ((gameTime * 26) % 90); wy < vy + vh; wy += 90) {
-    ctx.beginPath(); ctx.moveTo(1170, wy); ctx.lineTo(1210, wy); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(1180, wy + 45); ctx.lineTo(1228, wy + 45); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(970, wy); ctx.lineTo(1010, wy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(980, wy + 45); ctx.lineTo(1028, wy + 45); ctx.stroke();
   }
 
   // 三路：橙色砖路（砖缝纹理 + 上下沿明暗）
@@ -1272,7 +1290,7 @@ function draw() {
   });
 
   // 泉水
-  [[0, 120, 600], [1, 2280, 600]].forEach(([t, x, y]) => {
+  [[0, 120, 450], [1, 1880, 450]].forEach(([t, x, y]) => {
     ctx.beginPath(); ctx.arc(x, y, 170, 0, 7);
     ctx.fillStyle = t === 0 ? '#3f8cff14' : '#ff525214'; ctx.fill();
     ctx.strokeStyle = TEAMCOL[t] + '55'; ctx.lineWidth = 2; ctx.stroke();
