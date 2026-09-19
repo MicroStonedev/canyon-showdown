@@ -7,7 +7,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #14171f;
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #e0e0e0; }
-  canvas#game { display: block; cursor: crosshair; }
+  canvas#game { display: block; cursor: none; }   /* 游戏内使用自绘准星，隐藏系统光标 */
   canvas#minimap { position: absolute; left: 14px; bottom: 14px; border: 2px solid #8a93aa;
     border-radius: 4px; background: #0d1420; box-shadow: 0 4px 18px rgba(0,0,0,0.6); }
 
@@ -959,11 +959,13 @@ function tryAttack(c) {
     // 近战判定：meleeArc<1 时为正前方扇形（刺客 1/8 圆）；肉盾为整圆无方向限制
     // 刺客的挥击不能穿越墙体（有视线遮挡就不命中）
     const wallBlind = r.meleeArc < 1;
+    const s0 = r.r / 15;
+    const ox = c.x, oy = c.y - 16 * s0;                        // 普攻起点：胸部（略高于髋部），非脚底
     const inArc = (x, y, rad) => {
-      if (dist(c, { x, y }) >= mr + rad) return false;
-      if (wallBlind && losBlocked(c.x, c.y, x, y)) return false;
+      if (Math.hypot(x - ox, y - oy) >= mr + rad) return false;
+      if (wallBlind && losBlocked(ox, oy, x, y)) return false;
       if (half >= Math.PI) return true;
-      let diff = Math.abs(Math.atan2(y - c.y, x - c.x) - c.aim);
+      let diff = Math.abs(Math.atan2(y - oy, x - ox) - c.aim);
       if (diff > Math.PI) diff = 2 * Math.PI - diff;
       return diff <= half;
     };
@@ -971,10 +973,10 @@ function tryAttack(c) {
     towers.forEach(t => { if (t.alive && t.team !== c.team && inArc(t.x, t.y, TOWER.r)) hurtStruct(t, cAtk(c), c, false); });
     const cr = crystals[1 - c.team];
     if (inArc(cr.x, cr.y, CRYSTAL.r)) hurtStruct(cr, cAtk(c), c, true);
-    if (half >= Math.PI) {                                // 肉盾整圆：冲击环 + 盾击扇光
-      fx.push({ type: 'ring', x: c.x, y: c.y, r: mr, life: 0.28, color: '#ffb74d' });
-      fx.push({ type: 'arc', x: c.x, y: c.y, r: mr, a1: c.aim - 0.9, a2: c.aim + 0.9, life: 0.25, color: 'rgba(255,183,77,0.45)' });
-    } else fx.push({ type: 'arc', x: c.x, y: c.y, r: mr, a1: c.aim - half, a2: c.aim + half,
+    if (half >= Math.PI) {                                // 肉盾整圆：冲击环 + 盾击扇光（以身体中部为圆心）
+      fx.push({ type: 'ring', x: ox, y: oy, r: mr, life: 0.28, color: '#ffb74d' });
+      fx.push({ type: 'arc', x: ox, y: oy, r: mr, a1: c.aim - 0.9, a2: c.aim + 0.9, life: 0.25, color: 'rgba(255,183,77,0.45)' });
+    } else fx.push({ type: 'arc', x: ox, y: oy, r: mr, a1: c.aim - half, a2: c.aim + half,
       life: 0.25, color: c.role === 'assassin' ? 'rgba(227,232,242,0.5)' : (c.team === 0 ? 'rgba(158,207,255,0.35)' : 'rgba(255,138,128,0.35)') });
     Sfx.play('melee', c.x, c.y);
   } else {
@@ -1515,7 +1517,9 @@ function updateCam(dt) {
   const cx0 = player.x - vw / 2, cy0 = player.y - vh / 2;
   cam.x = clamp(cx0 + pan.x, 0, Math.max(0, W - vw));
   cam.y = clamp(cy0 + pan.y, 0, Math.max(0, H - vh));
-  pan.x = cam.x - cx0; pan.y = cam.y - cy0;              // 回写有效偏移，保证边界内
+  // 注意：不把"边界钳制产生的差值"回写进 pan——否则角色离开地图边缘后
+  // 视角会带着历史偏移滑行、角色长时间不回中；相机在边界处停住，
+  // 角色走到"居中视野可完整落入地图"的位置时即自动恢复居中跟随
 }
 
 /* ================= 渲染 ================= */
@@ -1848,6 +1852,35 @@ function draw() {
     }
   }
   drawMinimap();
+  drawCursor();                                                     // 自定义高可见准星（系统光标已隐藏）
+}
+
+// 自定义鼠标准星：亮青色圆环 + 四向刻线 + 中心点，深色描底保证任意背景可见；
+// 悬停敌方英雄时变红放大；轻微软性脉冲
+function drawCursor() {
+  const x = mouse.x, y = mouse.y;
+  const pulse = 1 + Math.sin(gameTime * 6) * 0.05;
+  let r = 9 * pulse, col = '#8ef4ff';
+  const wx = x / camZoom + cam.x, wy = y / camZoom + cam.y;         // 准星处的世界坐标
+  const hoverEnemy = champs.some(c2 => !c2.dead && c2.team !== player.team
+    && Math.hypot(c2.x - wx, c2.y - wy) < ROLES[c2.role].r + 8);
+  if (hoverEnemy) { col = '#ff7a7a'; r = 11.5 * pulse; }
+  ctx.save();
+  ctx.lineCap = 'round';
+  const ring = () => { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); };
+  ctx.strokeStyle = 'rgba(10,14,20,0.85)'; ctx.lineWidth = 4.4; ring(); ctx.stroke();   // 深色描底
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ring(); ctx.stroke();
+  [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {         // 四向刻线
+    ctx.strokeStyle = 'rgba(10,14,20,0.85)'; ctx.lineWidth = 3.4;
+    ctx.beginPath(); ctx.moveTo(x + dx * (r + 3), y + dy * (r + 3)); ctx.lineTo(x + dx * (r + 8), y + dy * (r + 8)); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x + dx * (r + 3), y + dy * (r + 3)); ctx.lineTo(x + dx * (r + 8), y + dy * (r + 8)); ctx.stroke();
+  });
+  ctx.fillStyle = 'rgba(10,14,20,0.85)';
+  ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 7); ctx.fill();             // 中心点
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.arc(x, y, 1.5, 0, 7); ctx.fill();
+  ctx.restore();
 }
 // 两段式肢体 IK：由起点、终点和两段长度求中间关节（肘/膝）
 function ikJoint(hx, hy, fx, fy, l1, l2, bend) {
