@@ -97,6 +97,19 @@
     padding: 10px 26px; font-size: 16px; cursor: pointer; transition: all .15s; }
   .langBtn:hover { border-color: #4caf5088; }
   .langBtn.sel { border-color: #4caf50; color: #7ee08a; background: #213028; }
+
+  /* ===== 地图选择 ===== */
+  #mapGrid { display: flex; gap: 14px; margin-bottom: 10px; }
+  .mapCard { background: #1e2330; border: 2px solid #333a4a; border-radius: 12px; padding: 8px;
+    cursor: pointer; transition: all .15s; text-align: center; }
+  .mapCard:hover { border-color: #4caf5088; transform: translateY(-3px); }
+  .mapCard.sel { border-color: #4caf50; background: #213028; box-shadow: 0 0 14px #4caf5055; }
+  .mapCard canvas { display: block; border-radius: 7px; width: 178px; height: 80px; }
+  .mapCard .nm { font-size: 13px; color: #cfd6e4; margin-top: 6px; }
+  .mapCard.sel .nm { color: #7ee08a; }
+  #mapDesc { min-height: 40px; max-width: 620px; color: #9aa3b5; font-size: 13px; line-height: 1.6;
+    text-align: center; margin-bottom: 18px; }
+  #mapDesc b { color: #cfd6e4; }
   .loginBox { display: flex; flex-direction: column; align-items: center; gap: 10px; }
   .loginLab { color: #9aa3b5; font-size: 14px; }
   #userName { background: #1e2330; border: 2px solid #333a4a; border-radius: 10px; color: #fff;
@@ -169,6 +182,8 @@
     <button class="langBtn sel" id="langCn">🇨🇳 中文</button>
     <button class="langBtn" id="langEn">🇺🇸 English</button>
   </div>
+  <div id="mapGrid"></div>
+  <div id="mapDesc">&nbsp;</div>
   <div class="loginBox">
     <div class="loginLab" id="lgNameLab">输入你的名字</div>
     <input id="userName" maxlength="10" autocomplete="off" spellcheck="false">
@@ -229,7 +244,6 @@ const WALLS_MID = [
   { x: 978, y: 130, w: 44, h: 190 }, { x: 978, y: 580, w: 44, h: 190 },   // 河道口岩石
 ];
 const mirror = a => [...a, ...a.map(t => ({ x: W - t.x - t.w, y: H - t.y - t.h, w: t.w, h: t.h }))];
-const WALLS = [...mirror(WALLS_BLUE), ...WALLS_MID];
 
 // 草丛：围绕防御塔与河道布置——每座塔前方两丛夹道（蹲守/越塔点），河道口与基地出口各一丛，中心对称
 const BUSHES_BLUE = [
@@ -238,7 +252,56 @@ const BUSHES_BLUE = [
   { x: 640, y: 390,  w: 120, h: 60 },                                     // 河道口
   { x: 250, y: 385,  w: 110, h: 70 },                                     // 基地出口
 ];
-const BUSHES = mirror(BUSHES_BLUE);
+
+// ===== 地图注册表（登录界面三选一） =====
+// 三张图共享相同的两路 / 防御塔 / 水晶 / 泉水坐标，仅地形、危险区与配色不同，保证平衡一致
+const LAVA_BLUE = [
+  { x: 420, y: 385, w: 150, h: 130 },                                     // 两路之间野区中央大池
+  { x: 800, y: 90,  w: 120, h: 90 },                                      // 河道口上 / 下
+  { x: 800, y: 720, w: 120, h: 90 },
+];
+const JUNGLE_BUSHES = [
+  { x: 400, y: 90,  w: 170, h: 90 }, { x: 400, y: 275, w: 170, h: 90 },   // 塔前大丛
+  { x: 400, y: 535, w: 170, h: 90 }, { x: 400, y: 720, w: 170, h: 90 },
+  { x: 630, y: 360, w: 160, h: 180 },                                     // 河道口巨型丛
+  { x: 210, y: 350, w: 150, h: 200 },                                     // 基地出口巨型丛
+  { x: 820, y: 150, w: 140, h: 120 },                                     // 河道上下
+  { x: 820, y: 630, w: 140, h: 120 },
+];
+const MAPS = [
+  { key: 'grass', name: '草地', en: 'Grasslands',
+    desc: '经典地图：河道、岩石与草丛的经典布局，视野与蹲守均衡', dEn: 'Classic: river, rocks and bushes — balanced vision and ambush play',
+    theme: { floorA: '#63936c', floorB: '#5e8d67', lane: '#e2a05a', laneLine: 'rgba(178,116,58,0.55)',
+      channel: 'water', waterA: '#48756f', waterB: '#52817a', waterGlint: 'rgba(220,245,240,0.14)',
+      bushA: 'rgba(43,94,50,0.92)', bushB: 'rgba(96,168,96,0.28)',
+      wallA: '#6fae5e', wallB: '#68a457', wallSide: '#4c8544', wallEdge: '#3f6e39',
+      mmWall: '#67a855', mmBush: '#2f5c36' },
+    build: () => ({ walls: [...mirror(WALLS_BLUE), ...WALLS_MID], bushes: mirror(BUSHES_BLUE), lava: [] }) },
+  { key: 'lava', name: '熔炉', en: 'Molten Cauldron',
+    desc: '踏入岩浆会减速 40% 并持续灼烧（不会致命）——谨慎走位！', dEn: 'Lava slows by 40% and burns over time (never lethal) — tread carefully!',
+    theme: { floorA: '#4a4148', floorB: '#453d44', lane: '#8a6a4a', laneLine: 'rgba(56,38,24,0.6)',
+      channel: 'lava', waterA: '#7a2408', waterB: '#a64308', waterGlint: 'rgba(255,200,90,0.16)',
+      bushA: 'rgba(74,48,30,0.92)', bushB: 'rgba(130,84,42,0.3)',
+      wallA: '#5a5560', wallB: '#524d58', wallSide: '#38343e', wallEdge: '#2b2831',
+      mmWall: '#6e6878', mmBush: '#4a3520' },
+    build: () => ({ walls: [...mirror(WALLS_BLUE), ...WALLS_MID], bushes: mirror([BUSHES_BLUE[4], BUSHES_BLUE[5]]),
+      lava: mirror(LAVA_BLUE) }) },
+  { key: 'jungle', name: '丛林', en: 'Jungle',
+    desc: '更多更大的草丛，隐身埋伏者的天堂，视野极度受限', dEn: 'Extra-large bushes everywhere — an ambusher\u2019s paradise with limited vision',
+    theme: { floorA: '#4f7f52', floorB: '#497a4d', lane: '#c99a52', laneLine: 'rgba(116,88,40,0.6)',
+      channel: 'water', waterA: '#3f6b52', waterB: '#4a7a5c', waterGlint: 'rgba(210,240,220,0.13)',
+      bushA: 'rgba(30,72,38,0.95)', bushB: 'rgba(78,150,82,0.32)',
+      wallA: '#55804a', wallB: '#4d7844', wallSide: '#35542f', wallEdge: '#2a4526',
+      mmWall: '#4f7a44', mmBush: '#234d2a' },
+    build: () => ({ walls: [...WALLS_MID], bushes: mirror(JUNGLE_BUSHES), lava: [] }) },
+];
+let WALLS = [], BUSHES = [], LAVA = [], MAP = MAPS[0];
+function loadMap(key) {                                                   // 切换地图：填充全局地形与主题
+  const def = MAPS.find(m => m.key === key) || MAPS[0];
+  const g = def.build();
+  MAP = def; WALLS = g.walls; BUSHES = g.bushes; LAVA = g.lava;
+  return def;
+}
 
 // ===== 海克斯强化符文（2/5/8 级三选一 · 棱彩/黄金两档） =====
 const HEXES = [
@@ -507,7 +570,10 @@ function resolveWalls(c) {
 }
 // AI 绕墙：前方 76px 有岩石就偏转方向
 function avoidAngle(x, y, ang) {
-  const clear = a => !WALLS.some(w => circleRectHit(x + Math.cos(a) * 76, y + Math.sin(a) * 76, 20, w));
+  const clear = a => {
+    const px = x + Math.cos(a) * 76, py = y + Math.sin(a) * 76;
+    return !WALLS.some(w => circleRectHit(px, py, 20, w)) && !LAVA.some(l => circleRectHit(px, py, 24, l));
+  };
   if (clear(ang)) return ang;
   for (const off of [0.55, -0.55, 1.1, -1.1, 1.7, -1.7, 2.4, -2.4]) if (clear(ang + off)) return ang + off;
   return ang + Math.PI;
@@ -644,7 +710,7 @@ const AudioSys = {
   },
 };
 AudioSys.load();
-const SFX_GAP = { shoot: 55, melee: 70, hit: 60, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100 };
+const SFX_GAP = { shoot: 55, melee: 70, hit: 60, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100, sizzle: 500 };
 const Sfx = {
   play(name, x, y) {
     const A = AudioSys;
@@ -679,6 +745,7 @@ const SOUNDS = {
   pickup:   (A, p) => A.tone({ f0: 620, f1: 1240, dur: 0.1, type: 'sine', vol: 0.12 * p.vol, pan: p.pan }),
   heal:     (A, p) => A.tone({ f0: 740, f1: 1100, dur: 0.14, type: 'sine', vol: 0.08 * p.vol, pan: p.pan }),
   dodge:    (A, p) => A.noise({ dur: 0.07, vol: 0.05 * p.vol, pan: p.pan, freq: 1400, ftype: 'bandpass' }),
+  sizzle:   (A, p) => A.noise({ dur: 0.3, vol: 0.07 * p.vol, pan: p.pan, freq: 2200, ftype: 'highpass' }),
   towerShoot: (A, p) => A.tone({ f0: 520, f1: 300, dur: 0.06, vol: 0.05 * p.vol, pan: p.pan }),
   turretDown: (A, p) => { A.tone({ f0: 180, f1: 45, dur: 0.5, type: 'sine', vol: 0.22 * p.vol, pan: p.pan });
                       A.noise({ dur: 0.45, vol: 0.16 * p.vol, pan: p.pan, freq: 420 }); },
@@ -812,6 +879,72 @@ function applyLoginLang() {
   $('loginErr').textContent = '';
   $('langCn').classList.toggle('sel', CN());
   $('langEn').classList.toggle('sel', !CN());
+  document.querySelectorAll('#mapGrid .mapCard').forEach(card => {
+    card.querySelector('.nm').textContent = CN() ? card._def.name : card._def.en;
+  });
+  showMapDesc(MAPS.find(m => m.key === selectedMap) || MAPS[0]);
+}
+
+/* ===== 地图选择 ===== */
+let selectedMap = 'grass';
+try {
+  const saved = localStorage.getItem('cs_map');
+  if (saved && MAPS.some(m => m.key === saved)) selectedMap = saved;
+} catch (e) {}
+function drawMapPreview(cv, def) {                  // 用真实地形数据渲染小地图预览
+  const g2 = cv.getContext('2d'), sc = cv.width / W, T2 = def.theme, geo = def.build();
+  for (let gx = 0; gx < Math.ceil(W / 90); gx++)
+    for (let gy = 0; gy < Math.ceil(H / 90); gy++) {
+      g2.fillStyle = ((gx + gy) % 2 === 0) ? T2.floorA : T2.floorB;
+      g2.fillRect(gx * 90 * sc, gy * 90 * sc, 90 * sc + 0.5, 90 * sc + 0.5);
+    }
+  g2.fillStyle = T2.waterA; g2.fillRect(940 * sc, 0, 120 * sc, cv.height);
+  g2.fillStyle = T2.channel === 'lava' ? '#ff7a26' : T2.waterB;
+  g2.fillRect(956 * sc, 0, 88 * sc, cv.height);
+  LANES.forEach(y => { g2.fillStyle = T2.lane; g2.fillRect(0, (y - 36) * sc, cv.width, 72 * sc); });
+  geo.lava.forEach(l => {
+    g2.fillStyle = '#ff6a1a'; g2.fillRect(l.x * sc, l.y * sc, l.w * sc, l.h * sc);
+    g2.strokeStyle = '#3a1408'; g2.strokeRect(l.x * sc, l.y * sc, l.w * sc, l.h * sc);
+  });
+  geo.bushes.forEach(b => {
+    g2.fillStyle = T2.bushA;
+    g2.beginPath(); g2.roundRect(b.x * sc, b.y * sc, b.w * sc, b.h * sc, 6); g2.fill();
+  });
+  geo.walls.forEach(w => {
+    g2.fillStyle = T2.wallA; g2.fillRect(w.x * sc, w.y * sc, w.w * sc, w.h * sc);
+    g2.fillStyle = T2.wallSide; g2.fillRect(w.x * sc, (w.y + w.h) * sc, w.w * sc, 4);
+  });
+  [[170, 450], [1830, 450]].forEach(([x, y]) => {   // 水晶点位
+    g2.save(); g2.translate(x * sc, y * sc); g2.rotate(Math.PI / 4);
+    g2.fillStyle = '#cfd6e4'; g2.fillRect(-4, -4, 8, 8); g2.restore();
+  });
+}
+function showMapDesc(def) {
+  $('mapDesc').innerHTML = CN() ? `<b>${def.name}</b> · ${def.desc}` : `<b>${def.en}</b> · ${def.dEn}`;
+}
+function buildMapCards() {
+  const grid = $('mapGrid'); grid.innerHTML = '';
+  MAPS.forEach(def => {
+    const card = document.createElement('div');
+    card.className = 'mapCard' + (def.key === selectedMap ? ' sel' : '');
+    card._def = def;
+    const cv = document.createElement('canvas'); cv.width = 178; cv.height = 80;
+    drawMapPreview(cv, def);
+    const nm = document.createElement('div'); nm.className = 'nm';
+    nm.textContent = CN() ? def.name : def.en;
+    card.appendChild(cv); card.appendChild(nm);
+    card.onmouseenter = () => showMapDesc(def);
+    card.onclick = () => {
+      selectedMap = def.key;
+      try { localStorage.setItem('cs_map', def.key); } catch (e) {}
+      document.querySelectorAll('.mapCard').forEach(x => x.classList.remove('sel'));
+      card.classList.add('sel');
+      showMapDesc(def);
+      Sfx.play('ui');
+    };
+    grid.appendChild(card);
+  });
+  showMapDesc(MAPS.find(m => m.key === selectedMap) || MAPS[0]);
 }
 $('langCn').onclick = () => { LANG = 'cn'; applyLoginLang(); Sfx.play('ui'); };
 $('langEn').onclick = () => { LANG = 'en'; applyLoginLang(); Sfx.play('ui'); };
@@ -830,6 +963,7 @@ $('startBtn').onclick = () => { Sfx.play('ui'); AudioSys.setBgmMode('battle'); $
 $('againBtn').onclick = () => { Sfx.play('ui'); AudioSys.setBgmMode('menu'); AudioSys.startBgm(); $('endScreen').style.display = 'none'; $('hud').style.display = 'none'; $('startScreen').style.display = 'flex'; state = 'select'; applyStartLang(); };
 applyLoginLang();
 buildRoleCards();
+buildMapCards();
 
 /* ================= 世界初始化 ================= */
 function mkChamp(role, team, name, idx, isPlayer) {
@@ -851,6 +985,7 @@ function mkChamp(role, team, name, idx, isPlayer) {
 }
 
 function initWorld(playerRole) {
+  loadMap(selectedMap);                              // 按登录界面所选地图加载地形与主题
   champs = []; towers = []; crystals = []; projs = []; telegraphs = []; fx = [];
   teamKills = [0, 0]; gameTime = 0; $('feed').innerHTML = '';
   pickups = []; pickupTimer = 4;
@@ -1147,7 +1282,7 @@ function updatePlayer(c, dt) {
   if (mouse.down) tryAttack(c);
 }
 const speedOf = c => ROLES[c.role].move * (c.slowT > 0 ? 0.5 : 1) * (c.speedT > 0 ? 1.3 : 1)
-  * (c.sprintT > 0 ? 1.45 : 1)
+  * (c.sprintT > 0 ? 1.45 : 1) * (c.onLava ? 0.6 : 1)
   + ROLES[c.role].move * ((c.hexes && c.hexes.mini ? 0.18 : 0) + (c.hexes && c.hexes.agile ? 0.12 : 0)
   + (c.hexes && c.hexes.giant ? 0.10 : 0)) + (c.moveBonus || 0);
 
@@ -1293,6 +1428,18 @@ function update(dt) {
     // 脱战回血：脱离战斗 5 秒后每秒恢复 5% 最大生命（战斗中不回复）；泉水无回复，仅作复活点
     if (gameTime - c.lastCombat > 5) c.hp = Math.min(c.maxHp, c.hp + c.maxHp * 0.05 * dt);
     c.inBush = BUSHES.some(b => inRect(c, b));           // 是否处于草丛（经验只来自击杀，无被动成长）
+    c.onLava = LAVA.some(l => circleRectHit(c.x, c.y, ROLES[c.role].r * 0.6, l));   // 岩浆判定（脚部小判定圈）
+    if (c.onLava && !c.dead) {
+      const before = c.hp;
+      c.lastCombat = gameTime;                           // 灼烧视为战斗状态：站在岩浆上不享受脱战回血
+      c.hp = Math.max(1, c.hp - c.maxHp * 0.06 * dt);    // 灼烧：每秒 6% 最大生命，保留 1 点血不会致命
+      if (gameTime - (c.lavaFxT || 0) > 0.6) {           // 节流：飘字 + 嘶嘶声
+        c.lavaFxT = gameTime;
+        const burn = Math.round(before - c.hp);
+        if (burn >= 1) fx.push({ type: 'text', x: c.x + (Math.random() * 16 - 8), y: c.y - 24, txt: '-' + burn, color: '#ff8a50', life: 0.6 });
+        Sfx.play('sizzle', c.x, c.y);
+      }
+    }
     c.sizeScale = (1 + 0.05 * (c.hexStacks || 0)) * ((c.hexes && c.hexes.mini) ? 0.7 : 1);   // 坦克引擎/缩小引擎
     c.dodgeChance = ((c.hexes && c.hexes.mini) ? 0.15 : 0) + ((c.hexes && c.hexes.agile) ? 0.10 : 0);
     // 你肩上的恶魔：光环伤害 + 周期性掉落道具
@@ -1529,27 +1676,33 @@ function draw() {
   ctx.setTransform(camZoom, 0, 0, camZoom, -cam.x * camZoom, -cam.y * camZoom);
   const vx = cam.x, vy = cam.y, vw = canvas.width / camZoom, vh = canvas.height / camZoom;
 
-  // ===== 低多边形地面：大块棋盘草皮 =====
+  // ===== 地面：按地图主题的大块棋盘地皮 =====
+  const TH = MAP.theme;
   const T = 90;
   for (let gx = Math.floor(vx / T) * T; gx < vx + vw; gx += T)
     for (let gy = Math.floor(vy / T) * T; gy < vy + vh; gy += T) {
-      ctx.fillStyle = ((gx / T + gy / T) % 2 === 0) ? '#63936c' : '#5e8d67';
+      ctx.fillStyle = ((gx / T + gy / T) % 2 === 0) ? TH.floorA : TH.floorB;
       ctx.fillRect(gx, gy, T, T);
     }
 
-  // 中央河道（水面微光）
-  ctx.fillStyle = '#48756f'; ctx.fillRect(940, vy, 120, vh);
-  ctx.fillStyle = '#52817a'; ctx.fillRect(956, vy, 88, vh);
-  ctx.strokeStyle = 'rgba(220,245,240,0.14)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  // 中央河道 / 岩浆带（水面 / 熔岩微光）
+  ctx.fillStyle = TH.waterA; ctx.fillRect(940, vy, 120, vh);
+  ctx.fillStyle = TH.waterB; ctx.fillRect(956, vy, 88, vh);
+  if (TH.channel === 'lava') {                             // 岩浆脉动光
+    const glow = 0.10 + Math.sin(gameTime * 3) * 0.06;
+    ctx.fillStyle = `rgba(255,120,30,${glow})`;
+    ctx.fillRect(940, vy, 120, vh);
+  }
+  ctx.strokeStyle = TH.waterGlint; ctx.lineWidth = 3; ctx.lineCap = 'round';
   for (let wy = vy - ((gameTime * 26) % 90); wy < vy + vh; wy += 90) {
     ctx.beginPath(); ctx.moveTo(970, wy); ctx.lineTo(1010, wy); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(980, wy + 45); ctx.lineTo(1028, wy + 45); ctx.stroke();
   }
 
-  // 三路：橙色砖路（砖缝纹理 + 上下沿明暗）
+  // 三路：砖路（砖缝纹理 + 上下沿明暗）
   LANES.forEach(y => {
-    ctx.fillStyle = '#e2a05a'; ctx.fillRect(0, y - 36, W, 72);
-    ctx.strokeStyle = 'rgba(178,116,58,0.55)'; ctx.lineWidth = 2;
+    ctx.fillStyle = TH.lane; ctx.fillRect(0, y - 36, W, 72);
+    ctx.strokeStyle = TH.laneLine; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, y - 12); ctx.lineTo(W, y - 12);
     ctx.moveTo(0, y + 12); ctx.lineTo(W, y + 12);
@@ -1564,15 +1717,15 @@ function draw() {
     ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(0, y + 32, W, 4);
   });
 
-  // 草丛（圆角深绿灌木，两层色）
+  // 草丛（圆角灌木，两层色，按主题配色）
   BUSHES.forEach(b => {
-    ctx.fillStyle = 'rgba(43,94,50,0.92)';
+    ctx.fillStyle = TH.bushA;
     ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 16); ctx.fill();
-    ctx.fillStyle = 'rgba(96,168,96,0.28)';
+    ctx.fillStyle = TH.bushB;
     ctx.beginPath(); ctx.roundRect(b.x + 5, b.y + 5, b.w - 10, b.h - 10, 11); ctx.fill();
   });
 
-  // 岩石 → 凸起草块（顶面棋盘草皮 + 前立面 + 投影）
+  // 岩石 → 凸起地块（顶面棋盘 + 前立面 + 投影，按主题配色）
   WALLS.forEach(w => {
     const D = 15;
     ctx.fillStyle = 'rgba(18,28,18,0.25)';
@@ -1580,13 +1733,32 @@ function draw() {
     const t2 = 28;
     for (let gx = w.x; gx < w.x + w.w; gx += t2)
       for (let gy = w.y; gy < w.y + w.h; gy += t2) {
-        ctx.fillStyle = ((gx / t2 + gy / t2) % 2 === 0) ? '#6fae5e' : '#68a457';
+        ctx.fillStyle = ((gx / t2 + gy / t2) % 2 === 0) ? TH.wallA : TH.wallB;
         ctx.fillRect(gx, gy, Math.min(t2, w.x + w.w - gx), Math.min(t2, w.y + w.h - gy));
       }
-    ctx.fillStyle = '#4c8544'; ctx.fillRect(w.x, w.y + w.h, w.w, D);
+    ctx.fillStyle = TH.wallSide; ctx.fillRect(w.x, w.y + w.h, w.w, D);
     ctx.fillStyle = 'rgba(0,0,0,0.14)'; ctx.fillRect(w.x, w.y + w.h, w.w, 4);
-    ctx.strokeStyle = '#3f6e39'; ctx.lineWidth = 2;
+    ctx.strokeStyle = TH.wallEdge; ctx.lineWidth = 2;
     ctx.strokeRect(w.x, w.y, w.w, w.h + D);
+  });
+
+  // 岩浆池（灼烧 + 减速）：熔岩渐变 + 脉动光 + 冒泡亮斑
+  LAVA.forEach(l => {
+    ctx.fillStyle = 'rgba(20,8,4,0.35)';
+    ctx.fillRect(l.x + 6, l.y + 8, l.w, l.h);
+    const gr = ctx.createLinearGradient(l.x, l.y, l.x, l.y + l.h);
+    gr.addColorStop(0, '#e8641e'); gr.addColorStop(0.5, '#c23c08'); gr.addColorStop(1, '#8a2404');
+    ctx.fillStyle = gr; ctx.fillRect(l.x, l.y, l.w, l.h);
+    ctx.strokeStyle = '#3a1408'; ctx.lineWidth = 3;
+    ctx.strokeRect(l.x, l.y, l.w, l.h);
+    ctx.fillStyle = `rgba(255,190,80,${0.16 + Math.sin(gameTime * 4 + l.x) * 0.10})`;
+    ctx.fillRect(l.x + 4, l.y + 4, l.w - 8, l.h - 8);
+    for (let i = 0; i < 3; i++) {
+      const bx = l.x + 10 + ((i * 53 + Math.floor(gameTime * 2) * 29) % Math.max(1, l.w - 20));
+      const by = l.y + 10 + ((i * 37 + Math.floor(gameTime * 3) * 17) % Math.max(1, l.h - 20));
+      ctx.fillStyle = 'rgba(255,220,120,0.5)';
+      ctx.beginPath(); ctx.arc(bx, by, 3, 0, 7); ctx.fill();
+    }
   });
 
   // 道具（上下浮动）
@@ -3051,8 +3223,9 @@ function drawMinimap() {
   mctx.fillStyle = '#10131a'; mctx.fillRect(0, 0, mm.width, mm.height);
   mctx.strokeStyle = '#2a3142'; mctx.lineWidth = 2;
   LANES.forEach(y => { mctx.beginPath(); mctx.moveTo(0, y * sy); mctx.lineTo(mm.width, y * sy); mctx.stroke(); });
-  WALLS.forEach(w => { mctx.fillStyle = '#67a855'; mctx.fillRect(w.x * sx, w.y * sy, Math.max(2, w.w * sx), Math.max(2, w.h * sy)); });
-  BUSHES.forEach(b => { mctx.fillStyle = '#2f5c36'; mctx.fillRect(b.x * sx, b.y * sy, b.w * sx, b.h * sy); });
+  WALLS.forEach(w => { mctx.fillStyle = MAP.theme.mmWall; mctx.fillRect(w.x * sx, w.y * sy, Math.max(2, w.w * sx), Math.max(2, w.h * sy)); });
+  BUSHES.forEach(b => { mctx.fillStyle = MAP.theme.mmBush; mctx.fillRect(b.x * sx, b.y * sy, Math.max(2, b.w * sx), Math.max(2, b.h * sy)); });
+  LAVA.forEach(l => { mctx.fillStyle = '#e05a10'; mctx.fillRect(l.x * sx, l.y * sy, Math.max(2, l.w * sx), Math.max(2, l.h * sy)); });
   towers.forEach(t => { if (t.alive) { mctx.fillStyle = TEAMCOL[t.team]; mctx.fillRect(t.x * sx - 2, t.y * sy - 2, 4, 4); } });
   crystals.forEach(cr => {
     mctx.fillStyle = TEAMCOL[cr.team];
