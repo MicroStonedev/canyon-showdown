@@ -48,6 +48,14 @@ Double-click `moba.html` to open it in your browser — nothing to install, no l
 | 🛡️ Tank | Melee full-circle area damage, thick HP | Earthshatter: area damage + slow |
 | ✚ Support | Ranged projectiles; basic attacks that hit allies heal them | Holy Wave: damages enemies and heals friendly units in its path |
 
+### Maps
+
+Pick a map on the login screen — hover a card for a description; your choice is remembered.
+
+- **Grasslands** — the classic layout: river, rocks, and balanced bushes
+- **Molten Cauldron** — lava river and pools: standing in lava slows you by 40% and burns 6% max HP per second (it never kills); bots steer around it
+- **Jungle** — extra-large bushes everywhere, limited vision — ambush heaven
+
 ### Field Items (random spawns)
 
 ❤️ Health pack · 🛡️ Shield · 👻 Invisibility · 👟 Speed boost · 🪝 Hook (fire with Q to drag an enemy to you)
