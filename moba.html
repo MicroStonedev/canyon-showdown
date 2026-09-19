@@ -230,6 +230,7 @@
 'use strict';
 /* ================= 基础配置 ================= */
 const W = 2000, H = 900;                  // 世界尺寸（更长的横向战场）
+const WALL_T = 64;                        // 地图外围城墙带厚度（画面可见，角色不可进入）
 const LANES = [225, 675];                 // 上 / 下两路
 const TEAMCOL = ['#3f8cff', '#ff5252'];
 const TOWER = { hp: 2600, range: 330, dmg: 110, cd: 0.92, projSpeed: 400, r: 22 };
@@ -1662,8 +1663,8 @@ function updateCam(dt) {
     if (mouse.y > canvas.height - 34) pan.y += sp;
   }
   const cx0 = player.x - vw / 2, cy0 = player.y - vh / 2;
-  cam.x = clamp(cx0 + pan.x, 0, Math.max(0, W - vw));
-  cam.y = clamp(cy0 + pan.y, 0, Math.max(0, H - vh));
+  cam.x = clamp(cx0 + pan.x, -WALL_T, Math.max(-WALL_T, W + WALL_T - vw));   // 视野可外扩到城墙带
+  cam.y = clamp(cy0 + pan.y, -WALL_T, Math.max(-WALL_T, H + WALL_T - vh));
   // 注意：不把"边界钳制产生的差值"回写进 pan——否则角色离开地图边缘后
   // 视角会带着历史偏移滑行、角色长时间不回中；相机在边界处停住，
   // 角色走到"居中视野可完整落入地图"的位置时即自动恢复居中跟随
@@ -1716,6 +1717,37 @@ function draw() {
     ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fillRect(0, y - 36, W, 4);
     ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(0, y + 32, W, 4);
   });
+
+  // ===== 外围城墙带（画面可见至墙外沿；角色仍被钳制在地图内移动）=====
+  ctx.fillStyle = '#434b5c';                                        // 石墙主体：覆盖地图矩形以外的视野区域
+  if (vy < 0) ctx.fillRect(vx, vy, vw, Math.min(-vy, vh));
+  if (vy + vh > H) ctx.fillRect(vx, H, vw, vy + vh - H);
+  if (vx < 0) ctx.fillRect(vx, Math.max(vy, 0), Math.min(-vx, vw), Math.max(0, Math.min(vy + vh, H) - Math.max(vy, 0)));
+  if (vx + vw > W) ctx.fillRect(W, Math.max(vy, 0), vx + vw - W, Math.max(0, Math.min(vy + vh, H) - Math.max(vy, 0)));
+  ctx.fillStyle = '#7b8699';                                        // 墙顶亮沿（贴地图边界的石帽）
+  if (vy < 0) ctx.fillRect(vx, -8, vw, 8);
+  if (vy + vh > H) ctx.fillRect(vx, H, vw, 8);
+  if (vx < 0) ctx.fillRect(-8, Math.max(vy, -8), 8, Math.min(vh, H + 8) - Math.max(vy, -8));
+  if (vx + vw > W) ctx.fillRect(W, Math.max(vy, -8), 8, Math.min(vh, H + 8) - Math.max(vy, -8));
+  ctx.strokeStyle = 'rgba(22,26,36,0.4)'; ctx.lineWidth = 2;       // 砖缝纹理
+  ctx.beginPath();
+  for (let bx2 = Math.floor(vx / 46) * 46; bx2 < vx + vw; bx2 += 46) {
+    if (vy < 0) { ctx.moveTo(bx2, -WALL_T); ctx.lineTo(bx2, -8); }
+    if (vy + vh > H) { ctx.moveTo(bx2, H + 8); ctx.lineTo(bx2, H + WALL_T); }
+  }
+  for (let by2 = Math.floor(vy / 46) * 46; by2 < vy + vh; by2 += 46) {
+    if (vx < 0) { ctx.moveTo(-WALL_T, by2); ctx.lineTo(-8, by2); }
+    if (vx + vw > W) { ctx.moveTo(W + 8, by2); ctx.lineTo(W + WALL_T, by2); }
+  }
+  if (vy < 0) { ctx.moveTo(vx, -WALL_T / 2); ctx.lineTo(vx + vw, -WALL_T / 2); }
+  if (vy + vh > H) { ctx.moveTo(vx, H + WALL_T / 2); ctx.lineTo(vx + vw, H + WALL_T / 2); }
+  if (vx < 0) { ctx.moveTo(-WALL_T / 2, Math.max(vy, -WALL_T)); ctx.lineTo(-WALL_T / 2, Math.min(vy + vh, H + WALL_T)); }
+  if (vx + vw > W) { ctx.moveTo(W + WALL_T / 2, Math.max(vy, -WALL_T)); ctx.lineTo(W + WALL_T / 2, Math.min(vy + vh, H + WALL_T)); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(12,18,14,0.25)'; ctx.lineWidth = 10;     // 墙体投在场地内的阴影
+  ctx.strokeRect(5, 5, W - 10, H - 10);
+  ctx.strokeStyle = '#2e3542'; ctx.lineWidth = 6;                  // 墙带外沿暗边
+  ctx.strokeRect(-WALL_T, -WALL_T, W + WALL_T * 2, H + WALL_T * 2);
 
   // 草丛（圆角灌木，两层色，按主题配色）
   BUSHES.forEach(b => {
@@ -3220,7 +3252,8 @@ function bar(x, y, w, h, pct, color) {
 }
 function drawMinimap() {
   const sx = mm.width / W, sy = mm.height / H;
-  mctx.fillStyle = '#10131a'; mctx.fillRect(0, 0, mm.width, mm.height);
+  mctx.fillStyle = '#434b5c'; mctx.fillRect(0, 0, mm.width, mm.height);   // 外围城墙带
+  mctx.fillStyle = '#10131a'; mctx.fillRect(4, 4, mm.width - 8, mm.height - 8);
   mctx.strokeStyle = '#2a3142'; mctx.lineWidth = 2;
   LANES.forEach(y => { mctx.beginPath(); mctx.moveTo(0, y * sy); mctx.lineTo(mm.width, y * sy); mctx.stroke(); });
   WALLS.forEach(w => { mctx.fillStyle = MAP.theme.mmWall; mctx.fillRect(w.x * sx, w.y * sy, Math.max(2, w.w * sx), Math.max(2, w.h * sy)); });
