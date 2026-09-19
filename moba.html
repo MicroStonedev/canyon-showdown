@@ -109,6 +109,21 @@
   #endStats { font-size: 16px; color: #cfd6e4; margin-bottom: 30px; line-height: 2; text-align: center; }
   .win { color: #ffd54f; text-shadow: 0 0 24px #ffd54f66; }
   .lose { color: #ff5252; text-shadow: 0 0 24px #ff525266; }
+
+  /* ===== 音频设置 ===== */
+  #gearBtn { position: fixed; top: 10px; right: 12px; z-index: 40; width: 42px; height: 42px;
+    border-radius: 50%; background: #1e2330cc; border: 2px solid #333a4a; color: #9aa3b5;
+    font-size: 19px; cursor: pointer; transition: all .15s; }
+  #gearBtn:hover { border-color: #4caf50; color: #7ee08a; transform: rotate(40deg); }
+  #settingsScreen { display: none; z-index: 30; }
+  .setBox { background: #1e2330; border: 2px solid #333a4a; border-radius: 14px; padding: 24px 30px;
+    display: flex; flex-direction: column; gap: 16px; min-width: 420px; }
+  .setRow { display: flex; align-items: center; gap: 14px; font-size: 15px; color: #cfd6e4; }
+  .setRow > span:first-child { width: 64px; text-align: right; color: #9aa3b5; }
+  .setRow input[type=range] { flex: 1; accent-color: #4caf50; }
+  .setRow b { width: 34px; color: #7ee08a; font-size: 13px; }
+  .setRow input[type=checkbox] { width: 18px; height: 18px; accent-color: #4caf50; }
+  .setHint { font-size: 12px; color: #7a8194; }
 </style>
 </head>
 <body>
@@ -178,6 +193,22 @@
   <h1 id="endTitle">胜利！</h1>
   <div id="endStats"></div>
   <button class="bigBtn" id="againBtn">再来一局</button>
+</div>
+
+<button id="gearBtn" title="设置 / Settings">⚙</button>
+<div class="overlay" id="settingsScreen">
+  <h1 id="setTitle" style="font-size:28px;color:#4caf50;letter-spacing:3px;margin-bottom:22px">⚙ 设置</h1>
+  <div class="setBox">
+    <div class="setRow"><span id="setMasterLab">主音量</span><input type="range" id="setMaster" min="0" max="100" value="80"><b id="setMasterVal">80</b></div>
+    <div class="setRow"><span id="setMusicLab">音乐</span><input type="range" id="setMusic" min="0" max="100" value="55"><b id="setMusicVal">55</b></div>
+    <div class="setRow"><span id="setSfxLab">音效</span><input type="range" id="setSfx" min="0" max="100" value="80"><b id="setSfxVal">80</b></div>
+    <div class="setRow"><span id="setMuteLab">静音</span><input type="checkbox" id="setMute"></div>
+    <div class="setHint" id="setHint">M 键快速静音 · ESC 开关设置（游戏中会暂停）</div>
+  </div>
+  <div style="display:flex; gap:14px; margin-top:26px">
+    <button class="bigBtn" id="setBackBtn" style="padding:11px 44px;font-size:16px">返 回</button>
+    <button class="langBtn" id="setResetBtn" style="padding:11px 22px;font-size:14px">恢复默认</button>
+  </div>
 </div>
 
 <script>
@@ -307,12 +338,16 @@ function openAugPick() {
       <div class="ico">${a.ico}</div><h3>${CN() ? a.name : a.en}</h3><p>${CN() ? a.desc : a.dEn}</p>`;
     d.onclick = () => {
       grantHex(choosing, a.k);
+      AudioSys.duck(false);
+      Sfx.play('augment');
       $('augScreen').style.display = 'none';
       choosing = null; state = 'playing';
     };
     box.appendChild(d);
   });
   $('augScreen').style.display = 'flex';
+  Sfx.play('augOpen');
+  AudioSys.duck(true);
 }
 function onSkillHit(src) {                                          // 技能命中敌方英雄结算
   if (!src || !src.hexes) return;
@@ -349,6 +384,7 @@ function spawnPickup() {
 }
 function applyPickup(c, p) {
   const info = PICKUP_KINDS.find(k => k.k === p.k);
+  Sfx.play(p.k === 'heal' ? 'heal' : (p.k === 'forge' ? 'augment' : 'pickup'), c.x, c.y);
   if (p.k === 'heal') {
     const h = Math.min(c.maxHp * 0.35, c.maxHp - c.hp);
     c.hp += h;
@@ -376,6 +412,7 @@ function applyPickup(c, p) {
 function fireHook(c, ang) {
   if (!c.hook || c.dead) return;
   c.hook = false;
+  Sfx.play('hookFire', c.x, c.y);
   projs.push({ x: c.x + Math.cos(ang) * 12, y: c.y - 16 + Math.sin(ang) * 8,
     vx: Math.cos(ang) * 640, vy: Math.sin(ang) * 640,
     team: c.team, owner: c, dmg: 30, r: 10, pierce: false, range: 520, travel: 0, hit: new Set(), kind: 'hook' });
@@ -407,7 +444,7 @@ const mm = document.getElementById('minimap'), mctx = mm.getContext('2d');
 const $ = id => document.getElementById(id);
 
 /* ================= 游戏状态 ================= */
-let state = 'login';                        // login / select / playing / aug / over
+let state = 'login';                        // login / select / playing / aug / paused / over
 let LANG = 'cn', userName = 'Player';       // 登录界面选择语言与名字
 let champs = [], towers = [], crystals = [], projs = [], telegraphs = [], fx = [], pickups = [], pickupTimer = 5;
 let teamKills = [0, 0], gameTime = 0, player = null;
@@ -474,6 +511,230 @@ function avoidAngle(x, y, ang) {
   return ang + Math.PI;
 }
 
+/* ================= 音频系统（Web Audio 合成，零素材） ================= */
+const AUDIO_DEFAULTS = { master: 0.8, music: 0.55, sfx: 0.8, mute: false };
+const AudioSys = {
+  ctx: null, master: null, musicGain: null, sfxGain: null, _nb: null,
+  set: { ...AUDIO_DEFAULTS },
+  lastPlay: {}, bgmTimer: null, bgmNext: 0, bgmStep: 0, bgmMode: 'menu',
+  load() { try { const s = JSON.parse(localStorage.getItem('cs_audio')); if (s) Object.assign(this.set, s); } catch (e) {} },
+  save() { try { localStorage.setItem('cs_audio', JSON.stringify(this.set)); } catch (e) {} },
+  init() {                                             // 首次用户手势时创建（浏览器自动播放策略）
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.musicGain = this.ctx.createGain();
+    this.sfxGain = this.ctx.createGain();
+    this.musicGain.connect(this.master);
+    this.sfxGain.connect(this.master);
+    this.master.connect(this.ctx.destination);
+    this.applyVolumes();
+    this.startBgm();
+  },
+  applyVolumes() {
+    if (!this.ctx) return;
+    this.master.gain.value = this.set.mute ? 0 : this.set.master;
+    this.musicGain.gain.value = this.set.music;
+    this.sfxGain.gain.value = this.set.sfx;
+  },
+  toggleMute() {
+    this.set.mute = !this.set.mute;
+    this.applyVolumes(); this.save();
+    if ($('settingsScreen').style.display === 'flex') syncSettingsUI();
+    Sfx.play('ui');
+  },
+  duck(on) {                                           // 符文选择时压低 BGM
+    if (!this.ctx) return;
+    const target = this.set.mute ? 0 : this.set.music * (on ? 0.3 : 1);
+    this.musicGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.15);
+  },
+  pos(x, y) {                                          // 以镜头为中心的空间化：音量随距离衰减 + 声像偏移
+    if (x === undefined) return { pan: 0, vol: 1 };
+    const vw = canvas.width / camZoom, vh = canvas.height / camZoom;
+    const cx = cam.x + vw / 2, cy = cam.y + vh / 2;
+    const vol = clamp(1.15 - Math.hypot(x - cx, y - cy) / (Math.max(vw, vh) * 0.85), 0.12, 1);
+    return { pan: clamp((x - cx) / (vw * 0.7), -0.8, 0.8), vol };
+  },
+  tone(o) {                                            // {f0,f1,dur,type,vol,pan,when,dest}
+    const c = this.ctx, t = c.currentTime + (o.when || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f0, t);
+    if (o.f1 && o.f1 !== o.f0) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.f1), t + o.dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.001, o.vol), t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+    osc.connect(g);
+    if (o.dest) g.connect(o.dest);
+    else if (this.ctx.createStereoPanner && o.pan) {
+      const p = c.createStereoPanner(); p.pan.value = o.pan;
+      g.connect(p); p.connect(this.sfxGain);
+    } else g.connect(this.sfxGain);
+    osc.start(t); osc.stop(t + o.dur + 0.05);
+  },
+  noise(o) {                                           // {dur,vol,pan,freq,ftype,when}
+    const c = this.ctx, t = c.currentTime + (o.when || 0);
+    if (!this._nb) {
+      const b = c.createBuffer(1, c.sampleRate, c.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this._nb = b;
+    }
+    const src = c.createBufferSource(); src.buffer = this._nb; src.loop = true;
+    const f = c.createBiquadFilter(); f.type = o.ftype || 'lowpass'; f.frequency.value = o.freq || 1000;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.001, o.vol), t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+    src.connect(f); f.connect(g);
+    if (this.ctx.createStereoPanner && o.pan) {
+      const p = c.createStereoPanner(); p.pan.value = o.pan;
+      g.connect(p); p.connect(this.sfxGain);
+    } else g.connect(this.sfxGain);
+    src.start(t); src.stop(t + o.dur + 0.05);
+  },
+  bnote(f, t, dur, type, vol) {                        // BGM 音符（走 music 总线，无声像）
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.musicGain);
+    o.start(t); o.stop(t + dur + 0.05);
+  },
+  bhat(t, vol) {                                       // BGM 打击噪音
+    const c = this.ctx;
+    if (!this._nb) { this.noise({ dur: 0.01, vol: 0.0001 }); }
+    const src = c.createBufferSource(); src.buffer = this._nb;
+    const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6000;
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+    src.connect(f); f.connect(g); g.connect(this.musicGain);
+    src.start(t); src.stop(t + 0.05);
+  },
+  startBgm() {
+    if (!this.ctx || this.bgmTimer) return;
+    this.bgmNext = this.ctx.currentTime + 0.1;
+    this.bgmTimer = setInterval(() => this.tickBgm(), 40);
+  },
+  stopBgm() { if (this.bgmTimer) { clearInterval(this.bgmTimer); this.bgmTimer = null; } },
+  setBgmMode(m) { this.bgmMode = m; },
+  tickBgm() {                                          // 前瞻调度器：生成式芯片音乐循环
+    const c = this.ctx;
+    if (!c || c.state !== 'running') return;
+    const battle = this.bgmMode === 'battle';
+    const stepDur = battle ? 0.16 : 0.24;
+    if (this.bgmNext < c.currentTime - 0.3) this.bgmNext = c.currentTime + 0.05;   // 后台节流后重新对齐
+    const chords = [[220, 261.63, 329.63], [174.61, 220, 261.63], [196, 246.94, 293.66], [164.81, 196, 246.94]];
+    const bass = [110, 87.31, 98, 82.41];
+    while (this.bgmNext < c.currentTime + 0.15) {
+      const step = this.bgmStep % 32, ci = (this.bgmStep >> 3) % 4;
+      if (step % 8 === 0) this.bnote(bass[ci], this.bgmNext, stepDur * 7.4, 'triangle', battle ? 0.15 : 0.11);
+      const patt = [0, 1, 2, 1, 0, 2, 1, 2];
+      const f = chords[ci][patt[step % 8]] * (battle && step % 16 >= 8 ? 2 : 1);
+      this.bnote(f, this.bgmNext, stepDur * 0.85, 'square', battle ? 0.05 : 0.036);
+      if (battle && step % 4 === 2) this.bhat(this.bgmNext, 0.03);
+      this.bgmNext += stepDur;
+      this.bgmStep++;
+    }
+  },
+};
+AudioSys.load();
+const SFX_GAP = { shoot: 55, melee: 70, hit: 60, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100 };
+const Sfx = {
+  play(name, x, y) {
+    const A = AudioSys;
+    if (!A.ctx || A.set.mute || A.set.sfx <= 0 || A.ctx.state !== 'running') return;
+    const now = performance.now(), gap = SFX_GAP[name] || 40;
+    if (A.lastPlay[name] && now - A.lastPlay[name] < gap) return;
+    A.lastPlay[name] = now;
+    const fn = SOUNDS[name];
+    if (fn) fn(A, A.pos(x, y));
+  },
+};
+const SOUNDS = {
+  ui:       (A, p) => A.tone({ f0: 1300, f1: 900, dur: 0.05, vol: 0.10 * p.vol, pan: p.pan }),
+  shoot:    (A, p) => A.tone({ f0: 950, f1: 380, dur: 0.07, vol: 0.07 * p.vol, pan: p.pan }),
+  melee:    (A, p) => A.noise({ dur: 0.09, vol: 0.06 * p.vol, pan: p.pan, freq: 900, ftype: 'bandpass' }),
+  hit:      (A, p) => { A.tone({ f0: 220, f1: 90, dur: 0.08, type: 'triangle', vol: 0.12 * p.vol, pan: p.pan });
+                      A.noise({ dur: 0.05, vol: 0.05 * p.vol, pan: p.pan, freq: 2400, ftype: 'highpass' }); },
+  skillCast:(A, p) => A.tone({ f0: 320, f1: 980, dur: 0.18, type: 'sawtooth', vol: 0.08 * p.vol, pan: p.pan }),
+  slam:     (A, p) => { A.tone({ f0: 150, f1: 40, dur: 0.35, type: 'sine', vol: 0.22 * p.vol, pan: p.pan });
+                      A.noise({ dur: 0.3, vol: 0.14 * p.vol, pan: p.pan, freq: 300 }); },
+  hookFire: (A, p) => A.tone({ f0: 240, f1: 720, dur: 0.12, vol: 0.08 * p.vol, pan: p.pan }),
+  hookHit:  (A, p) => { A.tone({ f0: 1100, f1: 260, dur: 0.18, vol: 0.10 * p.vol, pan: p.pan });
+                      A.noise({ dur: 0.08, vol: 0.06 * p.vol, pan: p.pan, freq: 1800, ftype: 'bandpass' }); },
+  kill:     (A, p) => { A.tone({ f0: 660, dur: 0.09, vol: 0.10 * p.vol, pan: p.pan });
+                      A.tone({ f0: 880, dur: 0.16, vol: 0.10 * p.vol, pan: p.pan, when: 0.09 }); },
+  death:    (A, p) => { A.tone({ f0: 420, f1: 70, dur: 0.45, type: 'sawtooth', vol: 0.16, pan: p.pan });
+                      A.noise({ dur: 0.3, vol: 0.08, pan: p.pan, freq: 500 }); },
+  levelUp:  A => [523, 659, 784, 1046].forEach((f, i) => A.tone({ f0: f, dur: 0.12, vol: 0.09, when: i * 0.09 })),
+  respawn:  A => [392, 523, 659].forEach((f, i) => A.tone({ f0: f, dur: 0.1, type: 'sine', vol: 0.07, when: i * 0.07 })),
+  augOpen:  A => A.tone({ f0: 500, f1: 1000, dur: 0.25, type: 'triangle', vol: 0.10 }),
+  augment:  A => [1319, 1568, 2093].forEach((f, i) => A.tone({ f0: f, dur: 0.14, type: 'sine', vol: 0.10, when: i * 0.07 })),
+  pickup:   (A, p) => A.tone({ f0: 620, f1: 1240, dur: 0.1, type: 'sine', vol: 0.12 * p.vol, pan: p.pan }),
+  heal:     (A, p) => A.tone({ f0: 740, f1: 1100, dur: 0.14, type: 'sine', vol: 0.08 * p.vol, pan: p.pan }),
+  dodge:    (A, p) => A.noise({ dur: 0.07, vol: 0.05 * p.vol, pan: p.pan, freq: 1400, ftype: 'bandpass' }),
+  towerShoot: (A, p) => A.tone({ f0: 520, f1: 300, dur: 0.06, vol: 0.05 * p.vol, pan: p.pan }),
+  turretDown: (A, p) => { A.tone({ f0: 180, f1: 45, dur: 0.5, type: 'sine', vol: 0.22 * p.vol, pan: p.pan });
+                      A.noise({ dur: 0.45, vol: 0.16 * p.vol, pan: p.pan, freq: 420 }); },
+  crystalDown: (A, p) => { A.tone({ f0: 140, f1: 35, dur: 0.8, type: 'sine', vol: 0.26, pan: p.pan });
+                      A.noise({ dur: 0.7, vol: 0.2, pan: p.pan, freq: 380 });
+                      [880, 1109, 1319].forEach((f, i) => A.tone({ f0: f, dur: 0.3, type: 'sine', vol: 0.07, when: 0.25 + i * 0.1 })); },
+  victory:  A => [523, 659, 784, 1046, 784, 1046, 1319].forEach((f, i) => A.tone({ f0: f, dur: i === 6 ? 0.5 : 0.14, vol: 0.12, when: i * 0.13 })),
+  defeat:   A => [440, 349, 294, 220].forEach((f, i) => A.tone({ f0: f, dur: i === 3 ? 0.6 : 0.2, type: 'triangle', vol: 0.14, when: i * 0.18 })),
+};
+
+/* ================= 音频设置界面 ================= */
+function syncSettingsUI() {
+  $('setMaster').value = Math.round(AudioSys.set.master * 100);
+  $('setMusic').value = Math.round(AudioSys.set.music * 100);
+  $('setSfx').value = Math.round(AudioSys.set.sfx * 100);
+  $('setMasterVal').textContent = $('setMaster').value;
+  $('setMusicVal').textContent = $('setMusic').value;
+  $('setSfxVal').textContent = $('setSfx').value;
+  $('setMute').checked = AudioSys.set.mute;
+}
+function applySettingsLang() {
+  $('setTitle').textContent = CN() ? '⚙ 设置' : '⚙ SETTINGS';
+  $('setMasterLab').textContent = CN() ? '主音量' : 'Master';
+  $('setMusicLab').textContent = CN() ? '音乐' : 'Music';
+  $('setSfxLab').textContent = CN() ? '音效' : 'SFX';
+  $('setMuteLab').textContent = CN() ? '静音' : 'Mute';
+  $('setBackBtn').textContent = CN() ? '返 回' : 'BACK';
+  $('setResetBtn').textContent = CN() ? '恢复默认' : 'Reset';
+  $('setHint').textContent = CN() ? 'M 键快速静音 · ESC 开关设置（游戏中会暂停）' : 'M to mute · ESC toggles (pauses in game)';
+}
+function openSettings() {
+  if (state === 'playing') state = 'paused';
+  syncSettingsUI(); applySettingsLang();
+  $('settingsScreen').style.display = 'flex';
+  Sfx.play('ui');
+}
+function closeSettings() {
+  $('settingsScreen').style.display = 'none';
+  if (state === 'paused') state = 'playing';
+}
+function toggleSettings() {
+  if ($('settingsScreen').style.display === 'flex') closeSettings();
+  else openSettings();
+}
+[['setMaster', 'setMasterVal', 'master'], ['setMusic', 'setMusicVal', 'music'], ['setSfx', 'setSfxVal', 'sfx']].forEach(([id, lab, key]) => {
+  $(id).addEventListener('input', () => {
+    AudioSys.set[key] = $(id).value / 100;
+    $(lab).textContent = $(id).value;
+    AudioSys.applyVolumes(); AudioSys.save();
+  });
+});
+$('setMute').onchange = e => { AudioSys.set.mute = e.target.checked; AudioSys.applyVolumes(); AudioSys.save(); };
+$('setResetBtn').onclick = () => { Object.assign(AudioSys.set, AUDIO_DEFAULTS); AudioSys.applyVolumes(); AudioSys.save(); syncSettingsUI(); Sfx.play('ui'); };
+$('setBackBtn').onclick = () => { closeSettings(); Sfx.play('ui'); };
+$('gearBtn').onclick = () => toggleSettings();
+window.addEventListener('pointerdown', () => AudioSys.init());
+window.addEventListener('keydown', () => AudioSys.init());
+
 /* ================= 登录 & 选人界面 ================= */
 function buildRoleCards() {
   const cardsBox = $('roleCards');
@@ -491,6 +752,7 @@ function buildRoleCards() {
     c.onclick = () => {
       document.querySelectorAll('.card').forEach(x => x.classList.remove('sel'));
       c.classList.add('sel'); selectedRole = k; $('startBtn').disabled = false;
+      Sfx.play('ui');
     };
     cardsBox.appendChild(c);
   });
@@ -528,20 +790,21 @@ function applyLoginLang() {
   $('langCn').classList.toggle('sel', CN());
   $('langEn').classList.toggle('sel', !CN());
 }
-$('langCn').onclick = () => { LANG = 'cn'; applyLoginLang(); };
-$('langEn').onclick = () => { LANG = 'en'; applyLoginLang(); };
+$('langCn').onclick = () => { LANG = 'cn'; applyLoginLang(); Sfx.play('ui'); };
+$('langEn').onclick = () => { LANG = 'en'; applyLoginLang(); Sfx.play('ui'); };
 $('loginBtn').onclick = () => {
   const n = $('userName').value.trim();
   if (!n) { $('loginErr').textContent = CN() ? '请先输入你的名字' : 'Please enter your name first'; return; }
   userName = n.slice(0, 10);
+  Sfx.play('ui');
   $('loginScreen').style.display = 'none';
   $('startScreen').style.display = 'flex';
   state = 'select';
   applyStartLang();
 };
 $('userName').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
-$('startBtn').onclick = () => { $('startScreen').style.display = 'none'; initWorld(selectedRole); };
-$('againBtn').onclick = () => { $('endScreen').style.display = 'none'; $('hud').style.display = 'none'; $('startScreen').style.display = 'flex'; state = 'select'; applyStartLang(); };
+$('startBtn').onclick = () => { Sfx.play('ui'); AudioSys.setBgmMode('battle'); $('startScreen').style.display = 'none'; initWorld(selectedRole); };
+$('againBtn').onclick = () => { Sfx.play('ui'); AudioSys.setBgmMode('menu'); AudioSys.startBgm(); $('endScreen').style.display = 'none'; $('hud').style.display = 'none'; $('startScreen').style.display = 'flex'; state = 'select'; applyStartLang(); };
 applyLoginLang();
 buildRoleCards();
 
@@ -637,6 +900,9 @@ window.addEventListener('keydown', e => {
     if (player.hook) tryHook(player);
     else centerMsg(CN() ? 'Q 仅用于道具（钩子），技能按右键' : 'Q is for items (hook) — RMB casts skills', 800);
   }
+  if (e.target && e.target.tagName === 'INPUT') return;   // 输入框内不触发快捷键
+  if (k === 'escape') toggleSettings();
+  if (k === 'm') AudioSys.toggleMute();
 });
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
@@ -687,6 +953,7 @@ function tryAttack(c) {
       fx.push({ type: 'arc', x: c.x, y: c.y, r: mr, a1: c.aim - 0.9, a2: c.aim + 0.9, life: 0.25, color: 'rgba(255,183,77,0.45)' });
     } else fx.push({ type: 'arc', x: c.x, y: c.y, r: mr, a1: c.aim - half, a2: c.aim + half,
       life: 0.25, color: c.role === 'assassin' ? 'rgba(227,232,242,0.5)' : (c.team === 0 ? 'rgba(158,207,255,0.35)' : 'rgba(255,138,128,0.35)') });
+    Sfx.play('melee', c.x, c.y);
   } else {
     const s0 = r.r / 15, ax0 = Math.cos(c.vaim), ay0 = Math.sin(c.vaim);
     const sx = c.x + ax0 * 12 * s0, sy = c.y - 19 * s0 + ay0 * 9 * s0;      // 发射起点：弓/法杖中点（非脚底）
@@ -699,6 +966,7 @@ function tryAttack(c) {
     fireProj({ role: c.role, team: c.team, owner: c, psp: r.pSpeed, dmg: cAtk(c), pr: 6, rng,
       kind: c.role === 'support' ? 'bolt' : (c.role === 'marksman' ? 'cyanarrow' : 'basic') }, sx, sy, ang);
     fx.push({ type: 'spark', x: sx, y: sy, ang, life: 0.12 });              // 武器出手闪光
+    Sfx.play('shoot', sx, sy);
   }
   c.atkCdT = r.atkCd;
 }
@@ -733,6 +1001,7 @@ function trySkill(c, forcedAng) {
   }
   c.skillCdT = r.skill.cd * 100 / (100 + (c.hexHaste || 0));   // 技能急速（无限循环往复/科学狂人）
   c.skillAnimT = 0.35;                                   // 施法抬臂动画
+  Sfx.play('skillCast', c.x, c.y);
 }
 
 /* ================= 伤害 / 经验 / 死亡 ================= */
@@ -746,6 +1015,7 @@ function giveXp(c, amt) {
     c.lvl++; c.maxHp += r.hpL; c.hp += r.hpL;
     if (c.lvl === 2 || c.lvl === 5 || c.lvl === 8) queueAugment(c);   // 海克斯符文三选一
     fx.push({ type: 'text', x: c.x, y: c.y - 34, txt: (CN() ? '升级! Lv' : 'LEVEL UP! Lv') + c.lvl, color: '#ffd54f', life: 1.2 });
+    if (c.isPlayer) Sfx.play('levelUp');
     if (c.isPlayer) feed(CN() ? `⬆ 升到 ${c.lvl} 级：生命 +${r.hpL}，普攻 +${r.atkL}，技能伤害提升`
                               : `⬆ Reached Lv${c.lvl}: +${r.hpL} HP, +${r.atkL} AD, skills empowered`, '#7ee08a');
     if (c.isPlayer && c.lvl === 3) { feed(CN() ? '🌟 技能已解锁，按 RMB 释放！' : '🌟 Skill unlocked — cast with RMB!', '#ffd54f');
@@ -759,6 +1029,7 @@ function hurtChamp(c, dmg, src) {
   // ===== 海克斯闪避/增伤/减伤/处决结算 =====
   if (c.dodgeChance > 0 && Math.random() < c.dodgeChance) {                     // 缩小引擎/灵巧：闪避
     fx.push({ type: 'text', x: c.x, y: c.y - 20, txt: CN() ? '闪避' : 'DODGE', color: '#cfd6e4', life: 0.5 });
+    Sfx.play('dodge', c.x, c.y);
     return;
   }
   if (src && src.hexes) {
@@ -783,11 +1054,13 @@ function hurtChamp(c, dmg, src) {
     c.shield -= ab; dmg -= ab;
     if (c.shield <= 0) c.shieldT = 0;
     fx.push({ type: 'text', x: c.x, y: c.y - 12, txt: '(' + Math.round(ab) + ')', color: '#ffd54f', life: 0.6 });
+    if (ab >= 1) Sfx.play('hit', c.x, c.y);
     if (dmg <= 0) return;
   }
   c.hp -= dmg; if (src) src.dmg += dmg;
   c.stealthT = 0;                                        // 受伤破隐
   fx.push({ type: 'text', x: c.x + (Math.random() * 20 - 10), y: c.y - 24, txt: '-' + Math.round(dmg), color: TEAMCOL[c.team], life: 0.7 });
+  if (dmg >= 1) Sfx.play('hit', c.x, c.y);
   if (c.hp <= 0) {
     c.hp = 0; c.dead = true; c.deaths++; c.respawnT = 4 + c.lvl;
     if (c.hexes && c.hexes.tankeng && c.hexStacks > 0) {          // 坦克引擎：阵亡损失 65% 层数
@@ -822,6 +1095,7 @@ function hurtChamp(c, dmg, src) {
     }
     feed(src ? (CN() ? `${src.name} 击杀了 ${c.name}` : `${src.name} killed ${c.name}`)
              : (CN() ? '防御塔击杀了 ' + c.name : 'Turret killed ' + c.name), TEAMCOL[c.team]);
+    Sfx.play(c.isPlayer ? 'death' : 'kill', c.x, c.y);
     if (c.isPlayer) centerMsg('你已阵亡', 1200);
   }
 }
@@ -829,8 +1103,9 @@ function hurtStruct(s, dmg, src, isCrystal) {
   s.hp -= dmg; if (src) src.dmg += dmg;
   if (s.hp <= 0) {
     s.hp = 0;
-    if (isCrystal) { endGame(1 - s.team); return; }
+    if (isCrystal) { Sfx.play('crystalDown', s.x, s.y); endGame(1 - s.team); return; }
     s.alive = false;
+    Sfx.play('turretDown', s.x, s.y);
     feed(`${TEAMCOL[src ? src.team : 0] === '#3f8cff' ? (CN() ? '蓝方' : 'Blue') : (CN() ? '红方' : 'Red')} ${CN() ? '摧毁了防御塔！' : 'destroyed a turret!'}`, '#ffd54f');
   }
 }
@@ -953,6 +1228,7 @@ function update(dt) {
       if (c.respawnT <= 0) {
         c.dead = false; c.hp = c.maxHp; c.ai.st = 'push';
         c.x = c.team === 0 ? 120 : 1880; c.y = 450 + (Math.random() * 80 - 40);
+        if (c.isPlayer) Sfx.play('respawn');
       }
       return;
     }
@@ -1042,6 +1318,7 @@ function update(dt) {
         const tt = bd / TOWER.projSpeed, ang = Math.atan2(best.y + best.vy * tt * 0.7 - t.y, best.x + best.vx * tt * 0.7 - t.x);
         projs.push({ x: t.x, y: t.y - 64, vx: Math.cos(ang) * TOWER.projSpeed, vy: Math.sin(ang) * TOWER.projSpeed,
           team: t.team, owner: null, dmg: TOWER.dmg, r: 8, pierce: false, range: TOWER.range + 120, travel: 0, hit: new Set(), kind: 'tower' });
+        Sfx.play('towerShoot', t.x, t.y - 64);
         t.cd = TOWER.cd;
       }
     }
@@ -1057,6 +1334,7 @@ function update(dt) {
         const tt = bd / TOWER.projSpeed, ang = Math.atan2(best.y + best.vy * tt * 0.7 - cr.y, best.x + best.vx * tt * 0.7 - cr.x);
         projs.push({ x: cr.x, y: cr.y - 14, vx: Math.cos(ang) * TOWER.projSpeed, vy: Math.sin(ang) * TOWER.projSpeed,
           team: cr.team, owner: null, dmg: CRYSTAL.dmg, r: 9, pierce: false, range: CRYSTAL.range + 120, travel: 0, hit: new Set(), kind: 'tower' });
+        Sfx.play('towerShoot', cr.x, cr.y - 14);
         cr.cd = CRYSTAL.cd;
       }
     }
@@ -1091,6 +1369,7 @@ function update(dt) {
           if (p.kind === 'hook' && p.owner) {                   // 钩子：把命中的敌人拉到身前
             const dx = c.x - p.owner.x, dy = c.y - p.owner.y, d = Math.hypot(dx, dy) || 1;
             c.hooked = { t: 0.32, dur: 0.32, x0: c.x, y0: c.y, x1: p.owner.x + dx / d * 60, y1: p.owner.y + dy / d * 60, by: p.owner };
+            Sfx.play('hookHit', c.x, c.y);
             hurtChamp(c, dmg2, p.owner);
             dead = true; break;
           }
@@ -1104,6 +1383,7 @@ function update(dt) {
             c.hp += h;
             fx.push({ type: 'text', x: c.x, y: c.y - 24, txt: '+' + Math.round(h), color: '#7ee08a', life: 0.8 });
             fx.push({ type: 'healspark', x: c.x, y: c.y - 20, life: 0.6 });   // 治疗光点
+            Sfx.play('heal', c.x, c.y);
             if (!p.pierce) { dead = true; break; }              // 辅助普攻被友军"接住"
           }
         }
@@ -1139,6 +1419,7 @@ function update(dt) {
         }
       });
       fx.push({ type: 'ring', x: tg.x, y: tg.y, r: tg.r, life: 0.35, color: '#ffb74d' });
+      Sfx.play('slam', tg.x, tg.y);
       const cl = [];                                           // 地面裂纹
       for (let k = 0; k < 7; k++) {
         const a2 = Math.random() * 6.28, r1 = tg.r * 0.3, r2 = tg.r * (0.75 + Math.random() * 0.35);
@@ -1165,6 +1446,8 @@ function endGame(winTeam) {
   if (state === 'over') return;
   state = 'over';
   const win = winTeam === 0;
+  AudioSys.stopBgm();
+  Sfx.play(win ? 'victory' : 'defeat');
   $('endTitle').textContent = win ? (CN() ? '🏆 胜利！' : '🏆 VICTORY!') : (CN() ? '💀 失败' : '💀 DEFEAT');
   $('endTitle').className = win ? 'win' : 'lose';
   $('endStats').innerHTML = CN()
@@ -1732,7 +2015,7 @@ function loop(now) {
     if (augQueue.length) openAugPick();                  // 海克斯三选一（选择期间暂停）
     else update(dt);
   }
-  if (state === 'playing' || state === 'aug' || state === 'over') draw();
+  if (state === 'playing' || state === 'aug' || state === 'paused' || state === 'over') draw();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

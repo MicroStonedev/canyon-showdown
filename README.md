@@ -27,6 +27,8 @@ Double-click `moba.html` to open it in your browser — nothing to install, no l
 - `Left click` — Basic attack (hold to keep attacking)
 - `Right click` — Cast skill (unlocks at level 3)
 - `Q` — Use item (hook)
+- `ESC` — Settings / pause
+- `M` — Mute
 
 ### Rules
 
@@ -54,6 +56,8 @@ Double-click `moba.html` to open it in your browser — nothing to install, no l
 
 - Single HTML file, Canvas 2D rendering, `requestAnimationFrame` main loop
 - AI behavior includes dodging projectiles, pathing around rocks, retreating at low HP, grabbing items, and throwing hooks
+- Sound effects and background music are fully synthesized with the Web Audio API — zero audio assets; the generative chiptune BGM shifts between menu and battle intensity
+- Audio settings (master / music / SFX volume, mute) live behind the ⚙ button or `ESC`; they pause the match in-game and persist via `localStorage`
 - No external libraries, no build step, no network requests
 
 ## License
