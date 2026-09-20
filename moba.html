@@ -505,6 +505,68 @@ const roleKeys = ['marksman','assassin','tank','support'];
 
 
 
+// 发色渐变缓存：createLinearGradient 每次命中闪白重绘都会新建对象造成 GC 压力，
+// 渐变坐标在填充时才经当前变换解析，缓存后跨调用/跨画布（战斗画面与卡片预览）安全复用。
+// 放在角色模型定义之前：登录界面的卡片预览在模型函数定义前就会调用它们。
+const _hairGradCache = new Map();
+function hairGradOf(g, s, y1) {
+  const key = 'm' + (s * 100 | 0) + '|' + y1;
+  let byCtx = _hairGradCache.get(g);
+  if (!byCtx) { byCtx = {}; _hairGradCache.set(g, byCtx); }
+  let hg = byCtx[key];
+  if (!hg) {
+    hg = g.createLinearGradient(0, -34 * s, 0, y1 * s);
+    hg.addColorStop(0, '#eef8fc'); hg.addColorStop(0.5, '#bce4f2'); hg.addColorStop(1, '#7fc6e4');
+    byCtx[key] = hg;
+  }
+  return hg;
+}
+function pinkHairGradOf(g, s) {                           // 萨勒芬妮粉色渐变发（同样缓存）
+  const key = 'pink' + (s * 100 | 0);
+  let byCtx = _hairGradCache.get(g);
+  if (!byCtx) { byCtx = {}; _hairGradCache.set(g, byCtx); }
+  let hg = byCtx[key];
+  if (!hg) {
+    hg = g.createLinearGradient(0, -34 * s, 0, -8 * s);
+    hg.addColorStop(0, '#f2b8d0'); hg.addColorStop(0.5, '#e68fc0'); hg.addColorStop(1, '#d76bb8');
+    byCtx[key] = hg;
+  }
+  return hg;
+}
+
+// 受击闪白轮廓：把模型画进一张固定尺寸的小离屏画布，再用 source-atop 整块涂白。
+// 主画布上只需要一次 drawImage，全程不切 globalCompositeOperation ——
+// 之前在 1280x720 主画布上切 'lighter' 会强制全画布重新光栅化，受击帧从 17ms 涨到 560ms。
+const FLASH_W = 96, FLASH_H = 72, FLASH_FOOT = 12;  // FLASH_FOOT：模型脚底在闪白小画布中距底边的距离
+let _flashCv = null, _flashCtx = null;
+function flashSilhouette(c) {
+  if (!_flashCv) {
+    _flashCv = document.createElement('canvas');
+    _flashCv.width = FLASH_W; _flashCv.height = FLASH_H;
+    _flashCtx = _flashCv.getContext('2d');
+  }
+  const g = _flashCtx;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  g.globalAlpha = 1;
+  g.clearRect(0, 0, FLASH_W, FLASH_H);
+  g.save();
+  g.translate(FLASH_W / 2, FLASH_H - FLASH_FOOT);           // 以角色脚部为基准摆放模型
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const alpha = c.stealthT > 0 ? 0.55 : 1;
+  if (c.role === 'marksman') drawMarksmanModel(c, alpha, g);
+  else if (c.role === 'assassin') drawAssassinModel(c, alpha, g);
+  else if (c.role === 'tank') drawTankModel(c, alpha, g);
+  else if (c.role === 'support') drawSupportModel(c, alpha, g);
+  else drawStickman(c, alpha, g);
+  g.restore();
+  g.globalCompositeOperation = 'source-atop';              // 只涂在已有轮廓内
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, FLASH_W, FLASH_H);
+  g.globalCompositeOperation = 'source-over';
+  return _flashCv;
+}
+
 const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
 const mm = document.getElementById('minimap'), mctx = mm.getContext('2d');
 const $ = id => document.getElementById(id);
@@ -711,16 +773,20 @@ const AudioSys = {
   },
 };
 AudioSys.load();
-const SFX_GAP = { shoot: 55, melee: 70, hit: 60, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100, sizzle: 500 };
+const SFX_GAP = { shoot: 55, melee: 70, hit: 120, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100, sizzle: 500 };
 const Sfx = {
   play(name, x, y) {
     const A = AudioSys;
     if (!A.ctx || A.set.mute || A.set.sfx <= 0 || A.ctx.state !== 'running') return;
     const now = performance.now(), gap = SFX_GAP[name] || 40;
     if (A.lastPlay[name] && now - A.lastPlay[name] < gap) return;
+    const p = A.pos(x, y);
+    if (p.vol <= 0.25) {                                   // 远处事件：音量已趋近于无，直接跳过（省去音频节点创建）
+      if (name === 'hit' || name === 'shoot' || name === 'melee' || name === 'towerShoot') return;
+    }
     A.lastPlay[name] = now;
     const fn = SOUNDS[name];
-    if (fn) fn(A, A.pos(x, y));
+    if (fn) fn(A, p);
   },
 };
 const SOUNDS = {
@@ -1193,6 +1259,7 @@ function hurtChamp(c, dmg, src) {
     Sfx.play('dodge', c.x, c.y);
     return;
   }
+  c.hitT = gameTime;                                     // 受击时间戳：绘制层据此做 0.12s 受击闪白
   if (src && src.hexes) {
     if (src.hexes.strong) dmg *= 1.3;                                           // 大力
     if (src.hexes.astral) dmg *= 0.9;                                           // 星界躯体
@@ -1241,6 +1308,8 @@ function hurtChamp(c, dmg, src) {
       });
     }
     participants.forEach(a => {                           // 击杀/参与击杀的海克斯结算
+      if (a !== src)                                                 // 助攻提示飘字（击杀者除外）
+        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +85 XP', color: '#ffd54f', life: 1 });
       if (a.hexes && a.hexes.soul) {                              // 灵魂虹吸
         a.hp = Math.min(a.maxHp, a.hp + a.maxHp * 0.25);
         fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: '灵魂虹吸', color: '#b39ddb', life: 1 });
@@ -1262,6 +1331,12 @@ function hurtChamp(c, dmg, src) {
 }
 function hurtStruct(s, dmg, src, isCrystal) {
   s.hp -= dmg; if (src) src.dmg += dmg;
+  s.hitT = gameTime;                                       // 受击时间戳：绘制层据此做受击闪白
+  if (dmg >= 1) {                                          // 命中反馈：伤害数字 + 命中音（与打英雄一致）
+    fx.push({ type: 'text', x: s.x + (Math.random() * 20 - 10), y: s.y - (isCrystal ? 40 : 52),
+      txt: '-' + Math.round(dmg), color: TEAMCOL[s.team], life: 0.7 });
+    Sfx.play('hit', s.x, s.y);
+  }
   if (s.hp <= 0) {
     s.hp = 0;
     if (isCrystal) { Sfx.play('crystalDown', s.x, s.y); endGame(1 - s.team); return; }
@@ -1516,6 +1591,9 @@ function update(dt) {
   // 弹道
   for (let i = projs.length - 1; i >= 0; i--) {
     const p = projs[i];
+    const icol = p.kind === 'cyanarrow' ? '#4dd0e1'                    // 命中火花颜色随弹道类型
+      : ((p.kind === 'bolt' || p.kind === 'wave') ? '#fff59d'
+      : (p.team === 0 ? '#9ecfff' : '#ffc2bb'));
     p.x += p.vx * dt; p.y += p.vy * dt; p.travel += Math.hypot(p.vx, p.vy) * dt;
     let dead = p.travel > p.range;
     if (!dead && WALLS.some(w => circleRectHit(p.x, p.y, p.r, w))) {   // 被岩石挡下
@@ -1543,9 +1621,11 @@ function update(dt) {
             const dx = c.x - p.owner.x, dy = c.y - p.owner.y, d = Math.hypot(dx, dy) || 1;
             c.hooked = { t: 0.32, dur: 0.32, x0: c.x, y0: c.y, x1: p.owner.x + dx / d * 60, y1: p.owner.y + dy / d * 60, by: p.owner };
             Sfx.play('hookHit', c.x, c.y);
+            fx.push({ type: 'impact', x: c.x, y: c.y - 12, color: icol, life: 0.25 });
             hurtChamp(c, dmg2, p.owner);
             dead = true; break;
           }
+          fx.push({ type: 'impact', x: c.x, y: c.y - 12, color: icol, life: 0.25 });   // 命中落点火花
           hurtChamp(c, dmg2, p.owner); if (!p.pierce) { dead = true; break; }
         }
         else if (c !== p.owner && p.owner) {                    // 命中友军：圣光波/辅助普攻会治疗
@@ -1566,14 +1646,18 @@ function update(dt) {
       if (!t.alive || p.hit.has(t) || t.team === p.team) continue;
       if (dist(p, t) < p.r + TOWER.r) {
         if (p.kind === 'hook') { dead = true; break; }         // 钩子勾不动建筑
-        p.hit.add(t); hurtStruct(t, p.dmg, p.owner, false); if (!p.pierce) { dead = true; break; }
+        p.hit.add(t); hurtStruct(t, p.dmg, p.owner, false);
+        fx.push({ type: 'impact', x: p.x, y: p.y, color: icol, life: 0.25 });
+        if (!p.pierce) { dead = true; break; }
       }
     }
     if (!dead && p.owner && !p.hit.has(crystals[1 - p.team])) {
       const cr = crystals[1 - p.team];
       if (dist(p, cr) < p.r + CRYSTAL.r) {
         if (p.kind === 'hook') dead = true;
-        else { p.hit.add(cr); hurtStruct(cr, p.dmg, p.owner, true); if (!p.pierce) dead = true; }
+        else { p.hit.add(cr); hurtStruct(cr, p.dmg, p.owner, true);
+          fx.push({ type: 'impact', x: p.x, y: p.y, color: icol, life: 0.25 });
+          if (!p.pierce) dead = true; }
       }
     }
     if (dead) projs.splice(i, 1);
@@ -1847,6 +1931,8 @@ function draw() {
     ctx.fillStyle = TEAMCOL[t.team]; ctx.fillRect(-7, -7, 14, 14);
     ctx.fillStyle = '#eafaff'; ctx.fillRect(-2.5, -2.5, 5, 5);
     ctx.restore();
+    const tf = t.hitT ? clamp(1 - (gameTime - t.hitT) / 0.12, 0, 1) : 0;   // 受击白罩（0.12s 渐退）
+    if (tf > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * tf) + ')'; ctx.fillRect(t.x - 30, t.y - 59, 60, 73); }
     bar(t.x, t.y - 88, 44, 5, t.hp / t.maxHp, TEAMCOL[t.team]);
   });
 
@@ -1866,6 +1952,8 @@ function draw() {
     ctx.shadowColor = TEAMCOL[cr.team]; ctx.shadowBlur = 22;
     ctx.fillStyle = TEAMCOL[cr.team]; ctx.fillRect(-22, -22, 44, 44);
     ctx.restore();
+    const cf = cr.hitT ? clamp(1 - (gameTime - cr.hitT) / 0.12, 0, 1) : 0;   // 受击白罩（0.12s 渐退）
+    if (cf > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * cf) + ')'; ctx.fillRect(cr.x - 34, cr.y - 36, 68, 66); }
     bar(cr.x, cr.y - 46, 60, 7, cr.hp / cr.maxHp, TEAMCOL[cr.team]);
     ctx.fillStyle = '#9aa3b5'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(cr.team === 0 ? (CN() ? '蓝方水晶' : 'Blue Crystal') : (CN() ? '红方水晶' : 'Red Crystal'), cr.x, cr.y + 46);
@@ -1955,7 +2043,15 @@ function draw() {
 
     if (c.isPlayer) { ctx.save(); ctx.shadowColor = '#ffffff55'; ctx.shadowBlur = 12; }
     ctx.save(); ctx.translate(c.x, c.y);
+    const hf = c.hitT ? clamp(1 - (gameTime - c.hitT) / 0.12, 0, 1) : 0;   // 受击闪白（0.12s 渐退）
     drawStickman(c, c.stealthT > 0 ? 0.55 : 1);
+    if (hf > 0) {                                          // 闪白：小画布涂白轮廓后整张贴上，主画布全程不切混合模式
+      ctx.shadowBlur = 0;                                  // 不跟随玩家白光阴影，轮廓才贴得准
+      const fl = flashSilhouette(c);
+      ctx.globalAlpha = (c.stealthT > 0 ? 0.55 : 1) * Math.min(0.85, hf * 0.8);
+      ctx.drawImage(fl, -FLASH_W / 2, -(FLASH_H - FLASH_FOOT));   // 脚底锚点与模型对齐
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
     if (c.isPlayer) ctx.restore();
 
@@ -1978,14 +2074,28 @@ function draw() {
 
   // 特效
   fx.forEach(f => {
-    if (f.type === 'text') {
+    if (f.type === 'impact') {                                     // 弹道命中落点火花：六向迸溅 + 中心闪点
+      const k = 1 - f.life / 0.25;
+      ctx.globalAlpha = Math.min(1, f.life / 0.25);
+      ctx.strokeStyle = f.color; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      for (let i2 = 0; i2 < 6; i2++) {
+        const a2 = i2 * 1.047 + 0.35;
+        const r0 = 3 + k * 7, r1 = 6 + k * 12;
+        ctx.beginPath();
+        ctx.moveTo(f.x + Math.cos(a2) * r0, f.y + Math.sin(a2) * r0);
+        ctx.lineTo(f.x + Math.cos(a2) * r1, f.y + Math.sin(a2) * r1);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(f.x, f.y, Math.max(0, 2.6 * (1 - k)), 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (f.type === 'text') {
       ctx.globalAlpha = Math.min(1, f.life * 2);
       ctx.fillStyle = f.color; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(f.txt, f.x, f.y - (1.2 - f.life) * 26);
       ctx.globalAlpha = 1;
     } else if (f.type === 'ring') {
-      ctx.globalAlpha = f.life * 3; ctx.strokeStyle = f.color; ctx.lineWidth = 5;
-      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1.4 - f.life), 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.globalAlpha = f.life * 3; ctx.strokeStyle = f.color; ctx.lineWidth = 5;      ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1.4 - f.life), 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
     } else if (f.type === 'arc') {                        // 近战挥击：三层流光扇形
       const p = 1 - f.life / 0.25, sweep = f.a2 - f.a1;
       ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(p * 0.25);
@@ -2130,8 +2240,7 @@ function drawMarksmanModel(c, alpha, g) {
   const suit = '#3e3352', suitDk = '#2a2438', gold = '#c9a557', skin = '#7a6b85',
         scarf = '#b23a48', pants = '#35133d', boot = '#2a0a30',
         OUTLINE = 'rgba(26,17,36,0.6)', SHADOW = 'rgba(22,14,32,0.35)';
-  const hairGrad = g.createLinearGradient(0, -34 * s, 0, -12 * s);
-  hairGrad.addColorStop(0, '#eef8fc'); hairGrad.addColorStop(0.5, '#bce4f2'); hairGrad.addColorStop(1, '#7fc6e4');
+  const hairGrad = hairGradOf(g, s, -12);                 // 缓存的发色渐变（白色→淡蓝）
   const sway = Math.sin(T * 3.1 + ph * 0.6) * (moving ? 2 : 1.1) * s;   // 马尾/围巾摆动
 
   g.save();
@@ -2871,8 +2980,7 @@ function drawSupportModel(c, alpha, g) {
         skirt = '#6a4d8c', pink = '#ea7bae', pinkDk = '#c75d95', gold = '#c9a557',
         stocking = '#685786', shoe = '#4f84bc', shoeLt = '#5fa8e7',
         OUTLINE = 'rgba(24,16,28,0.55)', SHADOW = 'rgba(30,20,40,0.28)';
-  const hairGrad = g.createLinearGradient(0, -34 * s, 0, -8 * s);   // 粉色渐变发
-  hairGrad.addColorStop(0, '#f2b8d0'); hairGrad.addColorStop(0.5, '#e68fc0'); hairGrad.addColorStop(1, '#d76bb8');
+  const hairGrad = pinkHairGradOf(g, s);                  // 缓存的粉色渐变发
   const sway = Math.sin(T * 2.8 + ph * 0.5) * (moving ? 2.4 : 1.3) * s;   // 马尾/裙摆摆动
 
   g.save();
@@ -3098,11 +3206,12 @@ function drawSupportModel(c, alpha, g) {
 }
 
 // 火柴人 v2：空心圆头 + 两段式四肢（带肘/膝弯曲）+ 步态循环 + 三段式攻击动画（蓄力→挥出→收招）
-function drawStickman(c, alpha) {
-  if (c.role === 'marksman') { drawMarksmanModel(c, alpha); return; }   // 射手：右侧视角矢量建模 v3
-  if (c.role === 'assassin') { drawAssassinModel(c, alpha); return; }   // 刺客：右侧视角矢量建模 v3（亚索）
-  if (c.role === 'tank') { drawTankModel(c, alpha); return; }           // 肉盾：右侧视角矢量建模 v3（布隆）
-  if (c.role === 'support') { drawSupportModel(c, alpha); return; }     // 辅助：右侧视角矢量建模 v3（萨勒芬妮）
+function drawStickman(c, alpha, g) {
+  g = g || ctx;
+  if (c.role === 'marksman') { drawMarksmanModel(c, alpha, g); return; }   // 射手：右侧视角矢量建模 v3
+  if (c.role === 'assassin') { drawAssassinModel(c, alpha, g); return; }   // 刺客：右侧视角矢量建模 v3（亚索）
+  if (c.role === 'tank') { drawTankModel(c, alpha, g); return; }           // 肉盾：右侧视角矢量建模 v3（布隆）
+  if (c.role === 'support') { drawSupportModel(c, alpha, g); return; }     // 辅助：右侧视角矢量建模 v3（萨勒芬妮）
   const rd = ROLES[c.role], s = rd.r / 15;
   const teamCol = TEAMCOL[c.team];
   const dark = c.team === 0 ? '#1c4a85' : '#801f1f';
