@@ -1070,14 +1070,14 @@ function initWorld(playerRole) {
   player = champs[0];
 
   LANES.forEach(y => {
-    towers.push({ team: 0, x: 450,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 蓝方外塔
-    towers.push({ team: 0, x: 750,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 蓝方内塔
-    towers.push({ team: 1, x: 1250, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 红方内塔
-    towers.push({ team: 1, x: 1550, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 红方外塔
+    towers.push({ team: 0, x: 450,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方外塔
+    towers.push({ team: 0, x: 750,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方内塔
+    towers.push({ team: 1, x: 1250, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方内塔
+    towers.push({ team: 1, x: 1550, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方外塔
   });
   crystals = [
-    { team: 0, x: 170,  y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0 },
-    { team: 1, x: 1830, y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0 },
+    { team: 0, x: 170,  y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0, assistLog: new Map() },
+    { team: 1, x: 1830, y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0, assistLog: new Map() },
   ];
 
   champs.forEach(c => { c.baseMaxHp = c.maxHp; });      // 坦克引擎按初始生命百分比叠层
@@ -1304,12 +1304,12 @@ function hurtChamp(c, dmg, src) {
       champs.forEach(a => {
         if (a === src || a.dead || a.team !== src.team) return;
         const t = c.assistLog.get(a);
-        if (t !== undefined && gameTime - t <= 8) { giveXp(a, 85); participants.push(a); }
+        if (t !== undefined && gameTime - t <= 8) { giveXp(a, 100); participants.push(a); }
       });
     }
     participants.forEach(a => {                           // 击杀/参与击杀的海克斯结算
       if (a !== src)                                                 // 助攻提示飘字（击杀者除外）
-        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +85 XP', color: '#ffd54f', life: 1 });
+        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +100 XP', color: '#ffd54f', life: 1 });
       if (a.hexes && a.hexes.soul) {                              // 灵魂虹吸
         a.hp = Math.min(a.maxHp, a.hp + a.maxHp * 0.25);
         fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: '灵魂虹吸', color: '#b39ddb', life: 1 });
@@ -1337,10 +1337,25 @@ function hurtStruct(s, dmg, src, isCrystal) {
       txt: '-' + Math.round(dmg), color: TEAMCOL[s.team], life: 0.7 });
     Sfx.play('hit', s.x, s.y);
   }
+  if (src && s.assistLog && src.team !== s.team) s.assistLog.set(src, gameTime);   // 记录最近伤害来源，用于推塔助攻判定
   if (s.hp <= 0) {
     s.hp = 0;
     if (isCrystal) { Sfx.play('crystalDown', s.x, s.y); endGame(1 - s.team); return; }
     s.alive = false;
+    // 推塔经验：摧毁者 170，8 秒内参与过的队友各 100（与人头同规则）
+    const participants = [];
+    if (src) {
+      giveXp(src, 170); participants.push(src);
+      fx.push({ type: 'text', x: src.x, y: src.y - 30, txt: '+170 XP', color: '#ffd54f', life: 1 });
+    }
+    champs.forEach(a => {
+      if (!src || a === src || a.dead || a.team !== src.team) return;
+      const t = s.assistLog.get(a);
+      if (t !== undefined && gameTime - t <= 8) {
+        giveXp(a, 100); participants.push(a);
+        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +100 XP', color: '#ffd54f', life: 1 });
+      }
+    });
     Sfx.play('turretDown', s.x, s.y);
     feed(`${TEAMCOL[src ? src.team : 0] === '#3f8cff' ? (CN() ? '蓝方' : 'Blue') : (CN() ? '红方' : 'Red')} ${CN() ? '摧毁了防御塔！' : 'destroyed a turret!'}`, '#ffd54f');
   }
