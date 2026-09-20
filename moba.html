@@ -590,6 +590,29 @@ function circleRectHit(px, py, r, w) {
   const nx = clamp(px, w.x, w.x + w.w), ny = clamp(py, w.y, w.y + w.h);
   return (px - nx) ** 2 + (py - ny) ** 2 < r * r;
 }
+// 英雄受击判定：与模型身体本体等大的长方形（按职业分别标定，随角色半径缩放）。
+// 标定规则统一：上沿=身体最高点（举起的弓/法杖、挥出的刀不计入，与收窄宽度的取舍一致），
+// 下沿=鞋底（脚下那圈半透明队伍环是标识不是身体，不计入）。
+// 数值来自对四个模型在「双朝向 × 六种瞄准角 × 待机/跑动/前摇/出手/施法 × 武器举起/垂下」共 60 种姿势下的实测外框。
+const HITBOX = {
+  marksman: { hw: 12, top: 35, bot: -2 },
+  assassin: { hw: 12, top: 37.5, bot: -2 },
+  tank:     { hw: 14.5, top: 34.5, bot: -2 },
+  support:  { hw: 12, top: 40, bot: -2 },
+};
+function champBox(c) {
+  const b = HITBOX[c.role], s = ROLES[c.role].r / 15;
+  return { x: c.x - b.hw * s, y: c.y - b.top * s, w: b.hw * 2 * s, h: (b.top - b.bot) * s };
+}
+// 粗线段是否与判定框相交（突进路径用）：沿线采样，采样间距小于 2 倍 pad 即无漏检
+function segHitsBox(x1, y1, x2, y2, b, pad) {
+  const steps = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / (pad * 1.2)));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    if (circleRectHit(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, pad, b)) return true;
+  }
+  return false;
+}
 // 草丛视野：敌人进草后不可见（贴近或同草除外）
 // 草丛/隐身道具视野：敌人进草或隐身时不可见（贴近或同草除外）
 function seenBy(v, t) {
@@ -773,20 +796,16 @@ const AudioSys = {
   },
 };
 AudioSys.load();
-const SFX_GAP = { shoot: 55, melee: 70, hit: 120, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100, sizzle: 500 };
+const SFX_GAP = { shoot: 55, melee: 70, hit: 60, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100, sizzle: 500 };
 const Sfx = {
   play(name, x, y) {
     const A = AudioSys;
     if (!A.ctx || A.set.mute || A.set.sfx <= 0 || A.ctx.state !== 'running') return;
     const now = performance.now(), gap = SFX_GAP[name] || 40;
     if (A.lastPlay[name] && now - A.lastPlay[name] < gap) return;
-    const p = A.pos(x, y);
-    if (p.vol <= 0.25) {                                   // 远处事件：音量已趋近于无，直接跳过（省去音频节点创建）
-      if (name === 'hit' || name === 'shoot' || name === 'melee' || name === 'towerShoot') return;
-    }
     A.lastPlay[name] = now;
     const fn = SOUNDS[name];
-    if (fn) fn(A, p);
+    if (fn) fn(A, A.pos(x, y));
   },
 };
 const SOUNDS = {
@@ -1070,14 +1089,14 @@ function initWorld(playerRole) {
   player = champs[0];
 
   LANES.forEach(y => {
-    towers.push({ team: 0, x: 450,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 蓝方外塔
-    towers.push({ team: 0, x: 750,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 蓝方内塔
-    towers.push({ team: 1, x: 1250, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 红方内塔
-    towers.push({ team: 1, x: 1550, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true });   // 红方外塔
+    towers.push({ team: 0, x: 450,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方外塔
+    towers.push({ team: 0, x: 750,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方内塔
+    towers.push({ team: 1, x: 1250, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方内塔
+    towers.push({ team: 1, x: 1550, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方外塔
   });
   crystals = [
-    { team: 0, x: 170,  y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0 },
-    { team: 1, x: 1830, y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0 },
+    { team: 0, x: 170,  y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0, assistLog: new Map() },
+    { team: 1, x: 1830, y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0, assistLog: new Map() },
   ];
 
   champs.forEach(c => { c.baseMaxHp = c.maxHp; });      // 坦克引擎按初始生命百分比叠层
@@ -1163,18 +1182,24 @@ function tryAttack(c) {
     const wallBlind = r.meleeArc < 1;
     const s0 = r.r / 15;
     const ox = c.x, oy = c.y - 16 * s0;                        // 普攻起点：胸部（略高于髋部），非脚底
-    const inArc = (x, y, rad) => {
-      if (Math.hypot(x - ox, y - oy) >= mr + rad) return false;
-      if (wallBlind && losBlocked(ox, oy, x, y)) return false;
+    const angOk = (x, y) => {                                  // 扇形方向检查（肉盾为整圆，直接通过）
       if (half >= Math.PI) return true;
       let diff = Math.abs(Math.atan2(y - oy, x - ox) - c.aim);
       if (diff > Math.PI) diff = 2 * Math.PI - diff;
       return diff <= half;
     };
-    champs.forEach(t => { if (!t.dead && t.team !== c.team && inArc(t.x, t.y, ROLES[t.role].r)) hurtChamp(t, cAtk(c), c); });
-    towers.forEach(t => { if (t.alive && t.team !== c.team && inArc(t.x, t.y, TOWER.r)) hurtStruct(t, cAtk(c), c, false); });
+    const inCircle = (x, y, rad) =>                            // 塔/水晶：单圆判定
+      Math.hypot(x - ox, y - oy) < mr + rad && angOk(x, y);
+    const inBox = t => {                                       // 英雄：等大长方形判定
+      const b = champBox(t);
+      if (!circleRectHit(ox, oy, mr, b)) return false;
+      if (wallBlind && losBlocked(ox, oy, b.x + b.w / 2, b.y + b.h / 2)) return false;
+      return angOk(b.x + b.w / 2, b.y + b.h / 2);
+    };
+    champs.forEach(t => { if (!t.dead && t.team !== c.team && inBox(t)) hurtChamp(t, cAtk(c), c); });
+    towers.forEach(t => { if (t.alive && t.team !== c.team && inCircle(t.x, t.y, TOWER.r)) hurtStruct(t, cAtk(c), c, false); });
     const cr = crystals[1 - c.team];
-    if (inArc(cr.x, cr.y, CRYSTAL.r)) hurtStruct(cr, cAtk(c), c, true);
+    if (inCircle(cr.x, cr.y, CRYSTAL.r)) hurtStruct(cr, cAtk(c), c, true);
     if (half >= Math.PI) {                                // 肉盾整圆：冲击环 + 盾击扇光（以身体中部为圆心）
       fx.push({ type: 'ring', x: ox, y: oy, r: mr, life: 0.28, color: '#ffb74d' });
       fx.push({ type: 'arc', x: ox, y: oy, r: mr, a1: c.aim - 0.9, a2: c.aim + 0.9, life: 0.25, color: 'rgba(255,183,77,0.45)' });
@@ -1304,12 +1329,12 @@ function hurtChamp(c, dmg, src) {
       champs.forEach(a => {
         if (a === src || a.dead || a.team !== src.team) return;
         const t = c.assistLog.get(a);
-        if (t !== undefined && gameTime - t <= 8) { giveXp(a, 85); participants.push(a); }
+        if (t !== undefined && gameTime - t <= 8) { giveXp(a, 100); participants.push(a); }
       });
     }
     participants.forEach(a => {                           // 击杀/参与击杀的海克斯结算
       if (a !== src)                                                 // 助攻提示飘字（击杀者除外）
-        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +85 XP', color: '#ffd54f', life: 1 });
+        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +100 XP', color: '#ffd54f', life: 1 });
       if (a.hexes && a.hexes.soul) {                              // 灵魂虹吸
         a.hp = Math.min(a.maxHp, a.hp + a.maxHp * 0.25);
         fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: '灵魂虹吸', color: '#b39ddb', life: 1 });
@@ -1337,10 +1362,25 @@ function hurtStruct(s, dmg, src, isCrystal) {
       txt: '-' + Math.round(dmg), color: TEAMCOL[s.team], life: 0.7 });
     Sfx.play('hit', s.x, s.y);
   }
+  if (src && s.assistLog && src.team !== s.team) s.assistLog.set(src, gameTime);   // 记录最近伤害来源，用于推塔助攻判定
   if (s.hp <= 0) {
     s.hp = 0;
     if (isCrystal) { Sfx.play('crystalDown', s.x, s.y); endGame(1 - s.team); return; }
     s.alive = false;
+    // 推塔经验：摧毁者 170，8 秒内参与过的队友各 100（与人头同规则）
+    const participants = [];
+    if (src) {
+      giveXp(src, 170); participants.push(src);
+      fx.push({ type: 'text', x: src.x, y: src.y - 30, txt: '+170 XP', color: '#ffd54f', life: 1 });
+    }
+    champs.forEach(a => {
+      if (!src || a === src || a.dead || a.team !== src.team) return;
+      const t = s.assistLog.get(a);
+      if (t !== undefined && gameTime - t <= 8) {
+        giveXp(a, 100); participants.push(a);
+        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +100 XP', color: '#ffd54f', life: 1 });
+      }
+    });
     Sfx.play('turretDown', s.x, s.y);
     feed(`${TEAMCOL[src ? src.team : 0] === '#3f8cff' ? (CN() ? '蓝方' : 'Blue') : (CN() ? '红方' : 'Red')} ${CN() ? '摧毁了防御塔！' : 'destroyed a turret!'}`, '#ffd54f');
   }
@@ -1488,7 +1528,7 @@ function update(dt) {
       if (!c.dashHit) {                                   // 突进瞬间结算路径伤害
         c.dashHit = true;
         const dmg = (80 + 18 * c.lvl) * (1 + (c.pursuitD || 0));
-        champs.forEach(t => { if (!t.dead && t.team !== c.team && segDist(c.dashFrom, c.dashTo, t) < 44) { hurtChamp(t, dmg, c); onSkillHit(c); } });
+        champs.forEach(t => { if (!t.dead && t.team !== c.team && segHitsBox(c.dashFrom.x, c.dashFrom.y, c.dashTo.x, c.dashTo.y, champBox(t), 12)) { hurtChamp(t, dmg, c); onSkillHit(c); } });
         fx.push({ type: 'slash', x1: c.dashFrom.x, y1: c.dashFrom.y, x2: c.dashTo.x, y2: c.dashTo.y, life: 0.25, color: '#b39ddb' });
       }
     } else {
@@ -1602,7 +1642,7 @@ function update(dt) {
     }
     for (const c of champs) {
       if (c.dead || p.hit.has(c)) continue;
-      if (dist(p, c) < p.r + ROLES[c.role].r) {
+      if (circleRectHit(p.x, p.y, p.r, champBox(c))) {
         p.hit.add(c);
         if (c.team !== p.team) {
           const isSkill = p.kind === 'arrow' || p.kind === 'wave';
@@ -1669,7 +1709,7 @@ function update(dt) {
     tg.t += dt;
     if (tg.t >= tg.dur) {
       champs.forEach(c => {
-        if (!c.dead && c.team !== tg.team && dist(c, tg) < tg.r + ROLES[c.role].r) {
+        if (!c.dead && c.team !== tg.team && circleRectHit(tg.x, tg.y, tg.r, champBox(c))) {
           const d = tg.dmg * (1 + (tg.owner ? tg.owner.pursuitD : 0));    // 威能之追求
           hurtChamp(c, d, tg.owner); c.slowT = 1.5;
           if (tg.owner) onSkillHit(tg.owner);
@@ -1741,10 +1781,18 @@ function updateCam(dt) {
   const vw = canvas.width / camZoom, vh = canvas.height / camZoom;
   if (state === 'playing') {                             // 鼠标移到屏幕边缘平移视角
     const sp = 640 * dt;
-    if (mouse.x < 34) pan.x -= sp;
-    if (mouse.x > canvas.width - 34) pan.x += sp;
-    if (mouse.y < 34) pan.y -= sp;
-    if (mouse.y > canvas.height - 34) pan.y += sp;
+    const inCombat = player && gameTime - player.lastCombat < 1.2;   // 战斗中锁视角（攻击/受击都会刷新战斗状态）
+    let px = 0, py = 0;
+    if (!inCombat) {                                     // 战斗中禁用：走砍/拉弓时光标极易扫到边缘，视角一晃就偏
+      if (mouse.x < 34) px -= sp;
+      if (mouse.x > canvas.width - 34) px += sp;
+      if (mouse.y < 34) py -= sp;
+      if (mouse.y > canvas.height - 34) py += sp;
+    }
+    pan.x += px; pan.y += py;
+    const back = Math.min(1, dt * 9);                       // 无输入时偏移指数回中（约 0.1s 时间常数）
+    if (px === 0) { pan.x -= pan.x * back; if (Math.abs(pan.x) < 0.5) pan.x = 0; }
+    if (py === 0) { pan.y -= pan.y * back; if (Math.abs(pan.y) < 0.5) pan.y = 0; }
   }
   const cx0 = player.x - vw / 2, cy0 = player.y - vh / 2;
   cam.x = clamp(cx0 + pan.x, -WALL_T, Math.max(-WALL_T, W + WALL_T - vw));   // 视野可外扩到城墙带
@@ -3386,11 +3434,14 @@ function drawMinimap() {
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (state === 'playing') {
-    if (augQueue.length) openAugPick();                  // 海克斯三选一（选择期间暂停）
-    else update(dt);
-  }
-  if (state === 'playing' || state === 'aug' || state === 'paused' || state === 'over') draw();
+  // 单帧异常不能让 rAF 链断掉：否则整个游戏会定格成一帧、再也无法操作
+  try {
+    if (state === 'playing') {
+      if (augQueue.length) openAugPick();                // 海克斯三选一（选择期间暂停）
+      else update(dt);
+    }
+    if (state === 'playing' || state === 'aug' || state === 'paused' || state === 'over') draw();
+  } catch (e) { console.error('frame error', e); }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
