@@ -8,8 +8,26 @@
   html, body { width: 100%; height: 100%; overflow: hidden; background: #14171f;
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #e0e0e0; }
   canvas#game { display: block; cursor: none; }   /* 游戏内使用自绘准星，隐藏系统光标 */
-  canvas#minimap { position: absolute; left: 14px; bottom: 14px; border: 2px solid #8a93aa;
+  canvas#minimap { position: absolute; right: 14px; bottom: 14px; border: 2px solid #8a93aa;
     border-radius: 4px; background: #0d1420; box-shadow: 0 4px 18px rgba(0,0,0,0.6); }
+
+  /* ===== KDA 与数值面板 ===== */
+  #kdaBar { position: absolute; top: 8px; right: 64px; background: #1e2330cc; border: 1px solid #333a4a;
+    border-radius: 8px; padding: 4px 14px; font-size: 16px; font-weight: bold; z-index: 5; text-align: center; }
+  #kdaBar .k { color: #7ee08a; } #kdaBar .d { color: #ff6b6b; } #kdaBar .a { color: #7ec8ff; }
+  #kdaBar small { display: block; font-size: 9px; color: #9aa3b5; font-weight: normal; letter-spacing: 3px; }
+  #statPanel { display: grid; grid-template-columns: auto auto; gap: 3px 8px; background: #1e2330;
+    border: 1px solid #333a4a; border-radius: 8px; padding: 8px 10px; font-size: 12px; align-self: center; }
+  #statPanel .si { color: #9aa3b5; } #statPanel .sv { color: #e0e0e0; font-weight: bold; text-align: right; }
+  #augOwned { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 5px; min-height: 36px; }
+  #augOwned .augIco { position: relative; font-size: 21px; line-height: 1; text-align: center; }
+  #augOwned .augIco b { display: block; font-size: 10px; color: #ffd54f; margin-top: -2px; }
+  #announce { position: absolute; top: 21%; left: 50%; transform: translateX(-50%); font-size: 48px;
+    font-weight: bold; color: #ffd54f; text-shadow: 0 0 26px #000, 0 3px 10px #000; display: none;
+    pointer-events: none; z-index: 6; letter-spacing: 5px; white-space: nowrap; }
+  #announce.pop { animation: announcePop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1); }
+  @keyframes announcePop { 0% { transform: translateX(-50%) scale(2.4); opacity: 0; }
+    100% { transform: translateX(-50%) scale(1); opacity: 1; } }
 
   /* ===== 顶部信息条 ===== */
   #topBar { position: absolute; top: 0; left: 0; right: 0; height: 52px;
@@ -120,6 +138,12 @@
   #endScreen { display: none; }
   #endTitle { font-size: 52px; margin-bottom: 10px; }
   #endStats { font-size: 16px; color: #cfd6e4; margin-bottom: 30px; line-height: 2; text-align: center; }
+  #mvpBox { background: #1e2330; border: 2px solid #d4af37; border-radius: 14px; padding: 14px 34px;
+    margin-bottom: 22px; text-align: center; box-shadow: 0 0 24px #d4af3744; }
+  #mvpBox .mvpTag { font-size: 13px; letter-spacing: 4px; color: #d4af37; margin-bottom: 6px; }
+  #mvpBox .mvpName { font-size: 26px; font-weight: bold; margin-bottom: 2px; }
+  #mvpBox .mvpRole { font-size: 13px; color: #9aa3b5; }
+  #mvpBox .mvpKda { font-size: 14px; color: #cfd6e4; margin-top: 6px; }
   .win { color: #ffd54f; text-shadow: 0 0 24px #ffd54f66; }
   .lose { color: #ff5252; text-shadow: 0 0 24px #ff525266; }
 
@@ -141,7 +165,9 @@
 </head>
 <body>
 <canvas id="game"></canvas>
-<canvas id="minimap" width="230" height="115"></canvas>
+<canvas id="minimap" width="300" height="150"></canvas>
+
+<div id="kdaBar"><small>K / D / A</small><span class="k">0</span> / <span class="d">0</span> / <span class="a">0</span></div>
 
 <div id="topBar">
   <div class="score b" id="bScore">0</div>
@@ -153,6 +179,7 @@
 
 <div id="feed"></div>
 <div id="centerMsg"></div>
+<div id="announce"></div>
 
 <div class="overlay" id="augScreen" style="display:none; background:#0d1017e6">
   <h1 id="augTitle" style="font-size:30px;color:#ffd54f;letter-spacing:2px">⚔ 强化符文</h1>
@@ -162,8 +189,9 @@
 
 <div id="hud" style="display:none">
   <div id="pLv"><small>等级</small><b id="pLvN">1</b></div>
-  <div id="augOwned" title="已拥有的强化符文"></div>
+  <div id="statPanel"></div>
   <div class="hpCol">
+    <div id="augOwned" title="已拥有的强化符文"></div>
     <div class="bar" id="pHpBar"><i id="pHpFill"></i></div>
     <div class="bar" id="pXpBar"><i id="pXpFill"></i></div>
     <div id="pHpText">550 / 550</div>
@@ -206,6 +234,7 @@
 
 <div class="overlay" id="endScreen">
   <h1 id="endTitle">胜利！</h1>
+  <div id="mvpBox"></div>
   <div id="endStats"></div>
   <button class="bigBtn" id="againBtn">再来一局</button>
 </div>
@@ -370,7 +399,7 @@ function rollThree(c) {
 function grantHex(c, k) {
   const wasFirst = !Object.keys(c.hexes).length;
   c.hexes[k] = true;
-  if (k === 'evil' && !wasFirst) c.hexAdBonus += 14;                // 超凡邪恶：第二个符文起始 +15
+  if (k === 'evil' && !wasFirst) c.evilAD = (c.evilAD || 0) + 14;   // 超凡邪恶：第二个符文起始 +15
   if (k === 'loop') c.hexHaste = Math.max(c.hexHaste || 0, 25);     // 无限循环往复：开局急速
   if (k === 'astral') { c.maxHp = Math.round(c.maxHp * 1.12); c.hp = Math.min(c.maxHp, c.hp * 1.12); }
   const a = HEXES.find(h => h.k === k);
@@ -415,12 +444,27 @@ function openAugPick() {
 }
 function onSkillHit(src) {                                          // 技能命中敌方英雄结算
   if (!src || !src.hexes) return;
-  if (src.hexes.evil) src.hexAdBonus += 1;                          // 超凡邪恶
+  if (src.hexes.evil) src.evilAD = (src.evilAD || 0) + 1;           // 超凡邪恶
   if (src.hexes.science) {                                          // 科学狂人
-    src.hexAdBonus += 3;
+    src.sciAD = (src.sciAD || 0) + 3;
     src.hexHaste = Math.min((src.hexHaste || 0) + 2, 60);
   }
 }
+
+// ===== 远古增益（中间线随机刷新 · 全队永久强化 · 每局约三次） =====
+const RARE_BUFFS = [
+  { k: 'atk',   ico: '⚔️', cn: '巨力结晶', en: 'Power Crystal',   apply: c => { c.hexAdBonus += 12; } },
+  { k: 'hp',    ico: '❤️', cn: '生命结晶', en: 'Vitality Crystal', apply: c => { c.maxHp += 90; c.hp += 90; } },
+  { k: 'ms',    ico: '👟', cn: '疾风结晶', en: 'Swiftness Crystal', apply: c => { c.moveBonus += 20; } },
+  { k: 'haste', ico: '⏱️', cn: '急速结晶', en: 'Haste Crystal',    apply: c => { c.hexHaste = Math.min((c.hexHaste || 0) + 15, 80); } },
+  { k: 'armor', ico: '🛡️', cn: '坚壁结晶', en: 'Aegis Crystal',    apply: c => { c.hexDR = Math.min((c.hexDR || 0) + 0.04, 0.12); } },
+];
+let rare = { state: 'idle', timer: 60, preT: 0, liveT: 0, pos: null, posName: '', buff: null, count: 0 };
+const RARE_SPOTS = () => [
+  { x: W / 2, y: 160, n: CN() ? '上方' : 'top' },
+  { x: W / 2, y: 450, n: CN() ? '中央' : 'middle' },
+  { x: W / 2, y: 740, n: CN() ? '下方' : 'bottom' },
+];
 
 // ===== 场上随机刷新的道具 =====
 const PICKUP_KINDS = [
@@ -459,8 +503,11 @@ function applyPickup(c, p) {
     c.stealthT = 6;
   } else if (p.k === 'sprint') {
     c.sprintT = 5;
-  } else if (p.k === 'hook') {
-    c.hook = true;
+  } else if (p.k === 'rare') {                           // 远古增益：拾取者的全队永久强化
+    const rb = RARE_BUFFS.find(b => b.k === p.rareBuff);
+    champs.forEach(a => { if (a.team === c.team) rb.apply(a); });
+    rare.count++; rare.state = 'idle'; rare.timer = 110 + Math.random() * 40;
+    if (c.isPlayer) feed(CN() ? `🏅 你的全队获得了【${rb.cn}】！` : `🏅 Your team gained ${rb.en}!`, '#b76ce9');
   } else if (p.k === 'forge') {                          // 属性锻造器：随机永久强化
   const roll = Math.floor(Math.random() * 3);
   if (roll === 0) { c.hexAdBonus += 12; if (c.isPlayer) feed(CN() ? '⚒️ 属性锻造器：攻击 +12' : '⚒️ Forge: +12 AD', '#ffd54f'); }
@@ -1063,6 +1110,7 @@ function mkChamp(role, team, name, idx, isPlayer) {
     atkCdT: 0, skillCdT: 0,
     slowT: 0, speedT: 0, sprintT: 0, stealthT: 0, shield: 0, shieldT: 0, hook: false, hooked: null, lastCombat: -99, assistLog: new Map(), walkPhase: 0, skillAnimT: 0,
     hexes: {}, hexAdBonus: 0, hexHaste: 0, hexStacks: 0, sizeScale: 1, dodgeChance: 0, demonT: 0, pursuitD: 0, moveBonus: 0, atkMouseDist: 0,
+    assists: 0, evilAD: 0, sciAD: 0, killChain: 0, lastKillT: -99, hexDR: 0,
     dashT: 0, dashFrom: null, dashTo: null, dashHit: false,
     dead: false, respawnT: 0,
     kills: 0, deaths: 0, dmg: 0,
@@ -1075,6 +1123,7 @@ function initWorld(playerRole) {
   champs = []; towers = []; crystals = []; projs = []; telegraphs = []; fx = [];
   teamKills = [0, 0]; gameTime = 0; $('feed').innerHTML = '';
   pickups = []; pickupTimer = 4;
+  rare = { state: 'idle', timer: 60, preT: 0, liveT: 0, pos: null, posName: '', buff: null, count: 0 };
   for (let i = 0; i < 4; i++) spawnPickup();
 
   // 我方：玩家 + 4 个 AI（补齐另外三系 + 随机一个）
@@ -1128,6 +1177,15 @@ function feed(txt, color) {
   $('feed').appendChild(d);
   setTimeout(() => d.remove(), 5000);
   while ($('feed').children.length > 5) $('feed').firstChild.remove();
+}
+function announceMsg(txt, col) {                        // 击杀大公告（双杀/三杀…）
+  const el = $('announce');
+  el.textContent = txt;
+  el.style.color = col || '#ffd54f';
+  el.style.display = 'block';
+  el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 2200);
 }
 function centerMsg(txt, dur) {
   const el = $('centerMsg'); el.textContent = txt; el.style.display = 'block';
@@ -1223,7 +1281,8 @@ function tryAttack(c) {
   c.atkCdT = r.atkCd;
 }
 const cAtk = c => {
-  let a = ROLES[c.role].atk + ROLES[c.role].atkL * (c.lvl - 1) + (c.hexAdBonus || 0);
+  let a = ROLES[c.role].atk + ROLES[c.role].atkL * (c.lvl - 1)
+    + (c.hexAdBonus || 0) + (c.evilAD || 0) + (c.sciAD || 0);
   if (c.hexes && c.hexes.storm) a *= 1 + 0.08 * Math.floor(gameTime / 45);   // 风暴聚集
   if (c.hexes && c.hexes.strong) a *= 1.30;                                  // 大力
   if (c.hexes && c.hexes.astral) a *= 0.90;                                  // 星界躯体
@@ -1279,7 +1338,7 @@ function hurtChamp(c, dmg, src) {
   c.lastCombat = gameTime; if (src) src.lastCombat = gameTime;   // 刷新双方战斗状态
   if (src && src.team !== c.team) c.assistLog.set(src, gameTime);   // 记录最近伤害来源，用于助攻判定
   // ===== 海克斯闪避/增伤/减伤/处决结算 =====
-  if (c.dodgeChance > 0 && Math.random() < c.dodgeChance) {                     // 缩小引擎/灵巧：闪避
+  if (!c._bypassDodge && c.dodgeChance > 0 && Math.random() < c.dodgeChance) {  // 闪避（防御塔弹道锁定后不可闪避）
     fx.push({ type: 'text', x: c.x, y: c.y - 20, txt: CN() ? '闪避' : 'DODGE', color: '#cfd6e4', life: 0.5 });
     Sfx.play('dodge', c.x, c.y);
     return;
@@ -1296,12 +1355,14 @@ function hurtChamp(c, dmg, src) {
       src.hp = Math.min(src.maxHp, src.hp + gr);
     }
     if (src.hexes.vamp) src.hp = Math.min(src.maxHp, src.hp + dmg * 0.15);      // 吸血习性
-      if (src.hexes.flykick && c.hp > 0 && dmg < c.hp && c.hp / c.maxHp < 0.15) { // 飞身踢处决
-        dmg = c.hp;
-        src.hp = Math.min(src.maxHp, src.hp + src.maxHp * 0.10);
-        fx.push({ type: 'text', x: c.x, y: c.y - 40, txt: CN() ? '处决!' : 'EXECUTED', color: '#ff5252', life: 0.8 });
-      }
+    if (src.hexes.flykick && c.hp > 0 && dmg < c.hp && c.hp / c.maxHp < 0.15) { // 飞身踢处决
+      dmg = c.hp;
+      src.hp = Math.min(src.maxHp, src.hp + src.maxHp * 0.10);
+      fx.push({ type: 'text', x: c.x, y: c.y - 40, txt: CN() ? '处决!' : 'EXECUTED', color: '#ff5252', life: 0.8 });
+    }
   }
+  if (c.augs && c.augs.iron) dmg *= 0.85;                                       // 钢铁皮肤（受伤 -15%）
+  if (c.hexDR) dmg *= 1 - Math.min(0.12, c.hexDR);                              // 坚壁结晶（上限 -12%）
   if (c.shield > 0) {                                   // 护盾先吸收伤害
     const ab = Math.min(c.shield, dmg);
     c.shield -= ab; dmg -= ab;
@@ -1324,7 +1385,16 @@ function hurtChamp(c, dmg, src) {
     }
     teamKills[src ? src.team : 1 - c.team]++;
     const participants = [];
-    if (src) { src.kills++; giveXp(src, 170); participants.push(src);
+    if (src) {
+      src.kills++; giveXp(src, 170); participants.push(src);
+      // 连续击杀播报：10 秒窗口内再杀 → 双杀/三杀/四杀/五杀
+      if (gameTime - src.lastKillT <= 10) src.killChain++; else src.killChain = 1;
+      src.lastKillT = gameTime;
+      if (src.killChain >= 2) {
+        const MK = CN() ? ['','','双杀！','三杀！','四杀！','五杀！']
+                        : ['','','DOUBLE KILL!','TRIPLE KILL!','QUADRA KILL!','PENTA KILL!'];
+        announceMsg(src.isPlayer ? MK[Math.min(src.killChain, 5)] : `${src.name} · ${MK[Math.min(src.killChain, 5)]}`, TEAMCOL[src.team]);
+      }
       // 助攻：目标死亡前 8 秒内对其造成过伤害的队友才能获得经验（与距离无关）
       champs.forEach(a => {
         if (a === src || a.dead || a.team !== src.team) return;
@@ -1333,6 +1403,7 @@ function hurtChamp(c, dmg, src) {
       });
     }
     participants.forEach(a => {                           // 击杀/参与击杀的海克斯结算
+      if (a !== src) a.assists = (a.assists || 0) + 1;    // 助攻计数（KDA 面板用）
       if (a !== src)                                                 // 助攻提示飘字（击杀者除外）
         fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +100 XP', color: '#ffd54f', life: 1 });
       if (a.hexes && a.hexes.soul) {                              // 灵魂虹吸
@@ -1574,6 +1645,36 @@ function update(dt) {
     }
   });
 
+  // 远古增益：中间线随机位置刷新（25 秒预告 → 落地 → 全队永久强化），每局约三次且不重叠
+  if (rare.state === 'idle' && rare.count < 3) {
+    rare.timer -= dt;
+    if (rare.timer <= 0) {
+      rare.state = 'pre'; rare.preT = 25;
+      const spots = RARE_SPOTS();
+      rare.pos = spots[Math.floor(Math.random() * spots.length)];
+      rare.posName = rare.pos.n;
+      rare.buff = RARE_BUFFS[Math.floor(Math.random() * RARE_BUFFS.length)];
+      feed(CN() ? `⚠️ 25 秒后：河道${rare.posName}将刷新远古增益【${rare.buff.cn}】（拾取者为全队永久强化！）`
+                : `⚠️ In 25s: ${rare.buff.en} spawns ${rare.posName} — permanent buff for the whole team!`, '#b76ce9');
+      centerMsg(CN() ? `⚠️ 远古增益即将出现` : '⚠️ Ancient buff incoming', 2000);
+    }
+  } else if (rare.state === 'pre') {
+    rare.preT -= dt;
+    if (rare.preT <= 0) {
+      rare.state = 'live'; rare.liveT = 45;
+      pickups.push({ x: rare.pos.x, y: rare.pos.y, k: 'rare', ico: rare.buff.ico, t: Math.random() * 6.28, rareBuff: rare.buff.k });
+      feed(CN() ? `✨ 远古增益【${rare.buff.cn}】已在河道${rare.posName}落地！` : `✨ ${rare.buff.en} has landed ${rare.posName}!`, '#b76ce9');
+    }
+  } else if (rare.state === 'live') {
+    rare.liveT -= dt;
+    if (rare.liveT <= 0) {                                // 无人拾取：45 秒后消散
+      const idx = pickups.findIndex(p => p.k === 'rare');
+      if (idx >= 0) pickups.splice(idx, 1);
+      rare.count++; rare.state = 'idle'; rare.timer = 70;
+      feed(CN() ? '远古增益无人拾取，已消散' : 'The ancient buff faded away unclaimed', '#9aa3b5');
+    }
+  }
+
   // 道具刷新与拾取
   pickupTimer -= dt;
   if (pickupTimer <= 0) { spawnPickup(); pickupTimer = 6 + Math.random() * 4; }
@@ -1595,33 +1696,47 @@ function update(dt) {
     }
   }
 
-  // 防御塔：射向射程内最近敌人（弹道可躲）
+  // 防御塔：进入射程即锁定，弹道追踪必中（不可闪避；目标阵亡弹道消散，离开射程才转移目标）
   towers.forEach(t => {
     if (!t.alive) return;
     t.cd -= dt;
     if (t.cd <= 0) {
-      let best = null, bd = TOWER.range;
-      champs.forEach(c => { if (!c.dead && c.team !== t.team && seenBy(t, c)) { const d = dist(c, t); if (d < bd) { bd = d; best = c; } } });
+      let best = null;
+      if (t.target && !t.target.dead && dist(t.target, t) < TOWER.range + 30) {
+        best = t.target;                                      // 已锁定目标优先持续攻击
+      } else {
+        t.target = null;
+        let bd = TOWER.range;
+        champs.forEach(c => { if (!c.dead && c.team !== t.team && seenBy(t, c)) { const d = dist(c, t); if (d < bd) { bd = d; best = c; } } });
+      }
       if (best) {
-        const tt = bd / TOWER.projSpeed, ang = Math.atan2(best.y + best.vy * tt * 0.7 - t.y, best.x + best.vx * tt * 0.7 - t.x);
-        projs.push({ x: t.x, y: t.y - 64, vx: Math.cos(ang) * TOWER.projSpeed, vy: Math.sin(ang) * TOWER.projSpeed,
-          team: t.team, owner: null, dmg: TOWER.dmg, r: 8, pierce: false, range: TOWER.range + 120, travel: 0, hit: new Set(), kind: 'tower' });
+        t.target = best;
+        projs.push({ x: t.x, y: t.y - 64, vx: 0, vy: 0, speed: TOWER.projSpeed,
+          team: t.team, owner: null, dmg: TOWER.dmg, r: 9, pierce: false, range: Infinity, travel: 0,
+          hit: new Set(), kind: 'tower', homing: best });
         Sfx.play('towerShoot', t.x, t.y - 64);
         t.cd = TOWER.cd;
       }
     }
   });
 
-  // 水晶也发起攻击：射向范围内的敌方英雄
+  // 水晶也发起攻击：锁定追踪弹（规则同防御塔）
   crystals.forEach(cr => {
     cr.cd = Math.max(0, (cr.cd || 0) - dt);
     if (cr.cd <= 0) {
-      let best = null, bd = CRYSTAL.range;
-      champs.forEach(c => { if (!c.dead && c.team !== cr.team) { const d = dist(c, cr); if (d < bd) { bd = d; best = c; } } });
+      let best = null;
+      if (cr.target && !cr.target.dead && dist(cr.target, cr) < CRYSTAL.range + 30) {
+        best = cr.target;
+      } else {
+        cr.target = null;
+        let bd = CRYSTAL.range;
+        champs.forEach(c => { if (!c.dead && c.team !== cr.team) { const d = dist(c, cr); if (d < bd) { bd = d; best = c; } } });
+      }
       if (best) {
-        const tt = bd / TOWER.projSpeed, ang = Math.atan2(best.y + best.vy * tt * 0.7 - cr.y, best.x + best.vx * tt * 0.7 - cr.x);
-        projs.push({ x: cr.x, y: cr.y - 14, vx: Math.cos(ang) * TOWER.projSpeed, vy: Math.sin(ang) * TOWER.projSpeed,
-          team: cr.team, owner: null, dmg: CRYSTAL.dmg, r: 9, pierce: false, range: CRYSTAL.range + 120, travel: 0, hit: new Set(), kind: 'tower' });
+        cr.target = best;
+        projs.push({ x: cr.x, y: cr.y - 14, vx: 0, vy: 0, speed: TOWER.projSpeed,
+          team: cr.team, owner: null, dmg: CRYSTAL.dmg, r: 9, pierce: false, range: Infinity, travel: 0,
+          hit: new Set(), kind: 'tower', homing: best });
         Sfx.play('towerShoot', cr.x, cr.y - 14);
         cr.cd = CRYSTAL.cd;
       }
@@ -1634,14 +1749,20 @@ function update(dt) {
     const icol = p.kind === 'cyanarrow' ? '#4dd0e1'                    // 命中火花颜色随弹道类型
       : ((p.kind === 'bolt' || p.kind === 'wave') ? '#fff59d'
       : (p.team === 0 ? '#9ecfff' : '#ffc2bb'));
+    if (p.homing) {                                        // 追踪弹：锁定后必中，跑多远追多远
+      if (p.homing.dead) { projs.splice(i, 1); continue; } // 目标阵亡，弹道消散
+      const ha = Math.atan2(p.homing.y - p.y, p.homing.x - p.x);
+      p.vx = Math.cos(ha) * p.speed; p.vy = Math.sin(ha) * p.speed;
+    }
     p.x += p.vx * dt; p.y += p.vy * dt; p.travel += Math.hypot(p.vx, p.vy) * dt;
     let dead = p.travel > p.range;
-    if (!dead && WALLS.some(w => circleRectHit(p.x, p.y, p.r, w))) {   // 被岩石挡下
+    if (!dead && !p.homing && WALLS.some(w => circleRectHit(p.x, p.y, p.r, w))) {   // 被岩石挡下（追踪弹无视岩石）
       dead = true;
       fx.push({ type: 'ring', x: p.x, y: p.y, r: 6, life: 0.2, color: '#8892a6' });
     }
     for (const c of champs) {
       if (c.dead || p.hit.has(c)) continue;
+      if (p.homing && c !== p.homing) continue;           // 追踪弹只命中锁定的目标
       if (circleRectHit(p.x, p.y, p.r, champBox(c))) {
         p.hit.add(c);
         if (c.team !== p.team) {
@@ -1657,16 +1778,20 @@ function update(dt) {
           }
           if (!isSkill && p.owner && p.owner.hexes && p.owner.hexes.pursuits)
             p.owner.skillCdT = Math.max(0, p.owner.skillCdT - 0.5);   // 疾速之追求
+          if (p.kind === 'tower') c._bypassDodge = true;        // 塔弹锁定：不可闪避
           if (p.kind === 'hook' && p.owner) {                   // 钩子：把命中的敌人拉到身前
             const dx = c.x - p.owner.x, dy = c.y - p.owner.y, d = Math.hypot(dx, dy) || 1;
             c.hooked = { t: 0.32, dur: 0.32, x0: c.x, y0: c.y, x1: p.owner.x + dx / d * 60, y1: p.owner.y + dy / d * 60, by: p.owner };
             Sfx.play('hookHit', c.x, c.y);
             fx.push({ type: 'impact', x: c.x, y: c.y - 12, color: icol, life: 0.25 });
             hurtChamp(c, dmg2, p.owner);
+            c._bypassDodge = false;
             dead = true; break;
           }
           fx.push({ type: 'impact', x: c.x, y: c.y - 12, color: icol, life: 0.25 });   // 命中落点火花
-          hurtChamp(c, dmg2, p.owner); if (!p.pierce) { dead = true; break; }
+          hurtChamp(c, dmg2, p.owner);
+          c._bypassDodge = false;
+          if (!p.pierce) { dead = true; break; }
         }
         else if (c !== p.owner && p.owner) {                    // 命中友军：圣光波/辅助普攻会治疗
           const blessM = p.owner && p.owner.hexes && p.owner.hexes.bless ? 1.5 : 1;
@@ -1747,6 +1872,19 @@ function endGame(winTeam) {
   Sfx.play(win ? 'victory' : 'defeat');
   $('endTitle').textContent = win ? (CN() ? '🏆 胜利！' : '🏆 VICTORY!') : (CN() ? '💀 失败' : '💀 DEFEAT');
   $('endTitle').className = win ? 'win' : 'lose';
+  // MVP：按击杀×3 + 助攻×1.5 − 阵亡×2 + 输出/400 计算全场最高分
+  const mvpScore = c => c.kills * 3 + c.assists * 1.5 - c.deaths * 2 + c.dmg / 400;
+  const mvp = champs.slice().sort((a, b) => mvpScore(b) - mvpScore(a))[0];
+  const mRole = roleName(mvp.role);
+  $('mvpBox').innerHTML = CN()
+    ? `<div class="mvpTag">🏅 本场最有价值玩家</div>
+       <div class="mvpName" style="color:${TEAMCOL[mvp.team]}">${mvp.name}${mvp.isPlayer ? '（你）' : ''}</div>
+       <div class="mvpRole">${mRole} · Lv${mvp.lvl}</div>
+       <div class="mvpKda">K/D/A ${mvp.kills} / ${mvp.deaths} / ${mvp.assists} · 输出 ${Math.round(mvp.dmg)}</div>`
+    : `<div class="mvpTag">🏅 MOST VALUABLE PLAYER</div>
+       <div class="mvpName" style="color:${TEAMCOL[mvp.team]}">${mvp.name}${mvp.isPlayer ? ' (You)' : ''}</div>
+       <div class="mvpRole">${mRole} · Lv${mvp.lvl}</div>
+       <div class="mvpKda">K/D/A ${mvp.kills} / ${mvp.deaths} / ${mvp.assists} · ${Math.round(mvp.dmg)} DMG</div>`;
   $('endStats').innerHTML = CN()
     ? `本局用时 ${fmtTime(gameTime)} · 比分 <span style="color:#6db3ff">${teamKills[0]}</span> : <span style="color:#ff8a80">${teamKills[1]}</span><br>`
       + `你的战绩：等级 ${player.lvl} · 击杀 ${player.kills} · 阵亡 ${player.deaths} · 总输出 ${Math.round(player.dmg)}`
@@ -1759,6 +1897,34 @@ function endGame(winTeam) {
 const fmtTime = t => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 function updateHud() {
   $('pLvN').textContent = player.lvl;
+  // KDA（右上角）
+  $('kdaBar').innerHTML = `<small>K / D / A</small><span class="k">${player.kills}</span> / <span class="d">${player.deaths}</span> / <span class="a">${player.assists || 0}</span>`;
+  // 自身数值面板（血条左侧）
+  const spd = Math.round(speedOf(player));
+  const aspd = (1 / ROLES[player.role].atkCd).toFixed(2);
+  const hs = player.hexHaste || 0;
+  const stats = [
+    ['⚔️', Math.round(cAtk(player))],
+    ['⚡', aspd],
+    ['👟', spd],
+    ['⏱️', hs],
+  ];
+  if (player.hexes && player.hexes.pearl) stats.push(['🔮', '30%']);
+  if (player.dodgeChance > 0) stats.push(['🪶', Math.round(player.dodgeChance * 100) + '%']);
+  if (player.hexes && player.hexes.vamp) stats.push(['🩸', '15%']);
+  if (player.augs && player.augs.iron) stats.push(['🪨', '-15%']);
+  $('statPanel').innerHTML = stats.map(([i, v]) => `<span class="si">${i}</span><span class="sv">${v}</span>`).join('');
+  // 符文图标 + 叠加数值（血条上方）
+  $('augOwned').innerHTML = HEXES.filter(h => player.hexes[h.k]).map(h => {
+    let v = '';
+    if (h.k === 'evil') v = player.evilAD || 0;
+    else if (h.k === 'science') v = player.sciAD || 0;
+    else if (h.k === 'tankeng') v = player.hexStacks || 0;
+    else if (h.k === 'loop') v = player.hexHaste || 0;
+    else if (h.k === 'storm') v = '+' + Math.round(8 * Math.floor(gameTime / 45)) + '%';
+    else if (h.k === 'pursuitp') v = '+' + Math.round((player.pursuitD || 0) * 100) + '%';
+    return `<span class="augIco" title="${CN() ? h.name : h.en}">${h.ico}${v !== '' ? '<b>' + v + '</b>' : ''}</span>`;
+  }).join('');
   $('pHpFill').style.width = (player.hp / player.maxHp * 100) + '%';
   $('pXpFill').style.width = (player.lvl >= 9 ? 100 : player.xp / xpNeed(player.lvl) * 100) + '%';
   const regen = (gameTime - player.lastCombat > 5 && player.hp < player.maxHp) ? (CN() ? ' · 脱战回复中' : ' · Regen') : '';
@@ -1768,7 +1934,6 @@ function updateHud() {
   else if (player.skillCdT > 0) { $('skillCd').style.height = (player.skillCdT / sk.cd * 100) + '%'; $('skillTxt').textContent = player.skillCdT.toFixed(1); }
   else { $('skillCd').style.height = '0%'; $('skillTxt').textContent = ''; }
   $('hookBox').style.display = player.hook ? '' : 'none';
-  $('augOwned').innerHTML = HEXES.filter(h => player.hexes[h.k]).map(h => `<span title="${h.name}">${h.ico}</span>`).join('');
   $('bScore').textContent = teamKills[0]; $('rScore').textContent = teamKills[1];
   $('timer').textContent = fmtTime(gameTime);
   $('bCryBar').style.width = (crystals[0].hp / crystals[0].maxHp * 100) + '%';
@@ -1925,13 +2090,31 @@ function draw() {
     }
   });
 
+  // 远古增益预告圈 / 落点提示
+  if (rare.state === 'pre' || rare.state === 'live') {
+    const pulse = 0.5 + 0.5 * Math.sin(gameTime * 4);
+    const rgb = rare.state === 'pre' ? '183,108,233' : '255,215,84';
+    ctx.strokeStyle = `rgba(${rgb},${0.45 + 0.35 * pulse})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(rare.pos.x, rare.pos.y, 30 + 8 * pulse, 0, 7); ctx.stroke();
+    ctx.fillStyle = `rgba(${rgb},${0.08 + 0.10 * pulse})`;
+    ctx.beginPath(); ctx.arc(rare.pos.x, rare.pos.y, 30 + 8 * pulse, 0, 7); ctx.fill();
+    if (rare.state === 'pre') {
+      ctx.fillStyle = '#b76ce9'; ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(Math.ceil(rare.preT) + 's', rare.pos.x, rare.pos.y - 42);
+    }
+  }
+
   // 道具（上下浮动）
   pickups.forEach(p => {
     const bob = Math.sin(gameTime * 3 + p.t) * 4;
-    ctx.beginPath(); ctx.arc(p.x, p.y + bob, 14, 0, 7);
-    ctx.fillStyle = '#262c3a'; ctx.fill();
-    ctx.strokeStyle = '#8a93aa'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.font = '15px sans-serif'; ctx.textAlign = 'center';
+    const isRare = p.k === 'rare';
+    if (isRare) { ctx.shadowColor = '#ffd54f'; ctx.shadowBlur = 16; }
+    ctx.beginPath(); ctx.arc(p.x, p.y + bob, isRare ? 18 : 14, 0, 7);
+    ctx.fillStyle = isRare ? '#3a2f14' : '#262c3a'; ctx.fill();
+    ctx.strokeStyle = isRare ? '#ffd54f' : '#8a93aa'; ctx.lineWidth = isRare ? 3 : 2; ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.font = (isRare ? '19' : '15') + 'px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(p.ico, p.x, p.y + bob + 5);
   });
 
@@ -3421,7 +3604,7 @@ function drawMinimap() {
     mctx.fillStyle = TEAMCOL[cr.team];
     mctx.save(); mctx.translate(cr.x * sx, cr.y * sy); mctx.rotate(Math.PI / 4); mctx.fillRect(-3.5, -3.5, 7, 7); mctx.restore();
   });
-  pickups.forEach(p => { mctx.fillStyle = '#cfd6e4'; mctx.fillRect(p.x * sx - 1.5, p.y * sy - 1.5, 3, 3); });
+  pickups.forEach(p => { mctx.fillStyle = p.k === 'rare' ? '#ffd54f' : '#cfd6e4'; mctx.fillRect(p.x * sx - 2, p.y * sy - 2, 4, 4); });
   champs.forEach(c => {
     if (c.dead || !seenBy(player, c)) return;
     mctx.beginPath(); mctx.arc(c.x * sx, c.y * sy, c.isPlayer ? 4 : 3, 0, 7);
