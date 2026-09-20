@@ -590,6 +590,29 @@ function circleRectHit(px, py, r, w) {
   const nx = clamp(px, w.x, w.x + w.w), ny = clamp(py, w.y, w.y + w.h);
   return (px - nx) ** 2 + (py - ny) ** 2 < r * r;
 }
+// 英雄受击判定：与模型身体本体等大的长方形（按职业分别标定，随角色半径缩放）。
+// 标定规则统一：上沿=身体最高点（举起的弓/法杖、挥出的刀不计入，与收窄宽度的取舍一致），
+// 下沿=鞋底（脚下那圈半透明队伍环是标识不是身体，不计入）。
+// 数值来自对四个模型在「双朝向 × 六种瞄准角 × 待机/跑动/前摇/出手/施法 × 武器举起/垂下」共 60 种姿势下的实测外框。
+const HITBOX = {
+  marksman: { hw: 12, top: 35, bot: -2 },
+  assassin: { hw: 12, top: 37.5, bot: -2 },
+  tank:     { hw: 14.5, top: 34.5, bot: -2 },
+  support:  { hw: 12, top: 40, bot: -2 },
+};
+function champBox(c) {
+  const b = HITBOX[c.role], s = ROLES[c.role].r / 15;
+  return { x: c.x - b.hw * s, y: c.y - b.top * s, w: b.hw * 2 * s, h: (b.top - b.bot) * s };
+}
+// 粗线段是否与判定框相交（突进路径用）：沿线采样，采样间距小于 2 倍 pad 即无漏检
+function segHitsBox(x1, y1, x2, y2, b, pad) {
+  const steps = Math.max(2, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / (pad * 1.2)));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    if (circleRectHit(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, pad, b)) return true;
+  }
+  return false;
+}
 // 草丛视野：敌人进草后不可见（贴近或同草除外）
 // 草丛/隐身道具视野：敌人进草或隐身时不可见（贴近或同草除外）
 function seenBy(v, t) {
@@ -1159,18 +1182,24 @@ function tryAttack(c) {
     const wallBlind = r.meleeArc < 1;
     const s0 = r.r / 15;
     const ox = c.x, oy = c.y - 16 * s0;                        // 普攻起点：胸部（略高于髋部），非脚底
-    const inArc = (x, y, rad) => {
-      if (Math.hypot(x - ox, y - oy) >= mr + rad) return false;
-      if (wallBlind && losBlocked(ox, oy, x, y)) return false;
+    const angOk = (x, y) => {                                  // 扇形方向检查（肉盾为整圆，直接通过）
       if (half >= Math.PI) return true;
       let diff = Math.abs(Math.atan2(y - oy, x - ox) - c.aim);
       if (diff > Math.PI) diff = 2 * Math.PI - diff;
       return diff <= half;
     };
-    champs.forEach(t => { if (!t.dead && t.team !== c.team && inArc(t.x, t.y, ROLES[t.role].r)) hurtChamp(t, cAtk(c), c); });
-    towers.forEach(t => { if (t.alive && t.team !== c.team && inArc(t.x, t.y, TOWER.r)) hurtStruct(t, cAtk(c), c, false); });
+    const inCircle = (x, y, rad) =>                            // 塔/水晶：单圆判定
+      Math.hypot(x - ox, y - oy) < mr + rad && angOk(x, y);
+    const inBox = t => {                                       // 英雄：等大长方形判定
+      const b = champBox(t);
+      if (!circleRectHit(ox, oy, mr, b)) return false;
+      if (wallBlind && losBlocked(ox, oy, b.x + b.w / 2, b.y + b.h / 2)) return false;
+      return angOk(b.x + b.w / 2, b.y + b.h / 2);
+    };
+    champs.forEach(t => { if (!t.dead && t.team !== c.team && inBox(t)) hurtChamp(t, cAtk(c), c); });
+    towers.forEach(t => { if (t.alive && t.team !== c.team && inCircle(t.x, t.y, TOWER.r)) hurtStruct(t, cAtk(c), c, false); });
     const cr = crystals[1 - c.team];
-    if (inArc(cr.x, cr.y, CRYSTAL.r)) hurtStruct(cr, cAtk(c), c, true);
+    if (inCircle(cr.x, cr.y, CRYSTAL.r)) hurtStruct(cr, cAtk(c), c, true);
     if (half >= Math.PI) {                                // 肉盾整圆：冲击环 + 盾击扇光（以身体中部为圆心）
       fx.push({ type: 'ring', x: ox, y: oy, r: mr, life: 0.28, color: '#ffb74d' });
       fx.push({ type: 'arc', x: ox, y: oy, r: mr, a1: c.aim - 0.9, a2: c.aim + 0.9, life: 0.25, color: 'rgba(255,183,77,0.45)' });
@@ -1499,7 +1528,7 @@ function update(dt) {
       if (!c.dashHit) {                                   // 突进瞬间结算路径伤害
         c.dashHit = true;
         const dmg = (80 + 18 * c.lvl) * (1 + (c.pursuitD || 0));
-        champs.forEach(t => { if (!t.dead && t.team !== c.team && segDist(c.dashFrom, c.dashTo, t) < 44) { hurtChamp(t, dmg, c); onSkillHit(c); } });
+        champs.forEach(t => { if (!t.dead && t.team !== c.team && segHitsBox(c.dashFrom.x, c.dashFrom.y, c.dashTo.x, c.dashTo.y, champBox(t), 12)) { hurtChamp(t, dmg, c); onSkillHit(c); } });
         fx.push({ type: 'slash', x1: c.dashFrom.x, y1: c.dashFrom.y, x2: c.dashTo.x, y2: c.dashTo.y, life: 0.25, color: '#b39ddb' });
       }
     } else {
@@ -1613,7 +1642,7 @@ function update(dt) {
     }
     for (const c of champs) {
       if (c.dead || p.hit.has(c)) continue;
-      if (dist(p, c) < p.r + ROLES[c.role].r) {
+      if (circleRectHit(p.x, p.y, p.r, champBox(c))) {
         p.hit.add(c);
         if (c.team !== p.team) {
           const isSkill = p.kind === 'arrow' || p.kind === 'wave';
@@ -1680,7 +1709,7 @@ function update(dt) {
     tg.t += dt;
     if (tg.t >= tg.dur) {
       champs.forEach(c => {
-        if (!c.dead && c.team !== tg.team && dist(c, tg) < tg.r + ROLES[c.role].r) {
+        if (!c.dead && c.team !== tg.team && circleRectHit(tg.x, tg.y, tg.r, champBox(c))) {
           const d = tg.dmg * (1 + (tg.owner ? tg.owner.pursuitD : 0));    // 威能之追求
           hurtChamp(c, d, tg.owner); c.slowT = 1.5;
           if (tg.owner) onSkillHit(tg.owner);
