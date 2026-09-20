@@ -773,20 +773,16 @@ const AudioSys = {
   },
 };
 AudioSys.load();
-const SFX_GAP = { shoot: 55, melee: 70, hit: 120, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100, sizzle: 500 };
+const SFX_GAP = { shoot: 55, melee: 70, hit: 60, towerShoot: 80, ui: 30, heal: 120, pickup: 60, dodge: 100, sizzle: 500 };
 const Sfx = {
   play(name, x, y) {
     const A = AudioSys;
     if (!A.ctx || A.set.mute || A.set.sfx <= 0 || A.ctx.state !== 'running') return;
     const now = performance.now(), gap = SFX_GAP[name] || 40;
     if (A.lastPlay[name] && now - A.lastPlay[name] < gap) return;
-    const p = A.pos(x, y);
-    if (p.vol <= 0.25) {                                   // 远处事件：音量已趋近于无，直接跳过（省去音频节点创建）
-      if (name === 'hit' || name === 'shoot' || name === 'melee' || name === 'towerShoot') return;
-    }
     A.lastPlay[name] = now;
     const fn = SOUNDS[name];
-    if (fn) fn(A, p);
+    if (fn) fn(A, A.pos(x, y));
   },
 };
 const SOUNDS = {
