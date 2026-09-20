@@ -1741,10 +1741,18 @@ function updateCam(dt) {
   const vw = canvas.width / camZoom, vh = canvas.height / camZoom;
   if (state === 'playing') {                             // 鼠标移到屏幕边缘平移视角
     const sp = 640 * dt;
-    if (mouse.x < 34) pan.x -= sp;
-    if (mouse.x > canvas.width - 34) pan.x += sp;
-    if (mouse.y < 34) pan.y -= sp;
-    if (mouse.y > canvas.height - 34) pan.y += sp;
+    const inCombat = player && gameTime - player.lastCombat < 1.2;   // 战斗中锁视角（攻击/受击都会刷新战斗状态）
+    let px = 0, py = 0;
+    if (!inCombat) {                                     // 战斗中禁用：走砍/拉弓时光标极易扫到边缘，视角一晃就偏
+      if (mouse.x < 34) px -= sp;
+      if (mouse.x > canvas.width - 34) px += sp;
+      if (mouse.y < 34) py -= sp;
+      if (mouse.y > canvas.height - 34) py += sp;
+    }
+    pan.x += px; pan.y += py;
+    const back = Math.min(1, dt * 9);                       // 无输入时偏移指数回中（约 0.1s 时间常数）
+    if (px === 0) { pan.x -= pan.x * back; if (Math.abs(pan.x) < 0.5) pan.x = 0; }
+    if (py === 0) { pan.y -= pan.y * back; if (Math.abs(pan.y) < 0.5) pan.y = 0; }
   }
   const cx0 = player.x - vw / 2, cy0 = player.y - vh / 2;
   cam.x = clamp(cx0 + pan.x, -WALL_T, Math.max(-WALL_T, W + WALL_T - vw));   // 视野可外扩到城墙带
