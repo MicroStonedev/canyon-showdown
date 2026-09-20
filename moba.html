@@ -3394,11 +3394,14 @@ function drawMinimap() {
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (state === 'playing') {
-    if (augQueue.length) openAugPick();                  // 海克斯三选一（选择期间暂停）
-    else update(dt);
-  }
-  if (state === 'playing' || state === 'aug' || state === 'paused' || state === 'over') draw();
+  // 单帧异常不能让 rAF 链断掉：否则整个游戏会定格成一帧、再也无法操作
+  try {
+    if (state === 'playing') {
+      if (augQueue.length) openAugPick();                // 海克斯三选一（选择期间暂停）
+      else update(dt);
+    }
+    if (state === 'playing' || state === 'aug' || state === 'paused' || state === 'over') draw();
+  } catch (e) { console.error('frame error', e); }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
