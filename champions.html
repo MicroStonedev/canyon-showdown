@@ -12,6 +12,11 @@
   h1 { color: #4caf50; font-size: 24px; margin-bottom: 4px; letter-spacing: 3px; }
   .sub { color: #9aa3b5; font-size: 13px; margin-bottom: 14px; }
   canvas { border-radius: 12px; }
+  .headRow { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .backBtn { display: inline-flex; align-items: center; gap: 7px; text-decoration: none;
+    background: #232936; color: #9fc4ff; border: 2px solid #333a4a; border-radius: 10px;
+    padding: 8px 18px; font-size: 14px; transition: all .15s ease; }
+  .backBtn:hover { border-color: #3f8cff; color: #cfe2ff; transform: translateX(-2px); }
   .langRow { display: flex; gap: 10px; margin-bottom: 16px; }
   .langBtn { background: #232936; color: #9aa3b5; border: 2px solid #333a4a; border-radius: 10px;
     padding: 7px 22px; font-size: 14px; cursor: pointer; transition: all .15s; font-family: inherit; }
@@ -20,12 +25,16 @@
 </style>
 </head>
 <body>
+<div class="headRow">
+  <a class="backBtn" id="backBtn" href="index.html">← 返回初始页面</a>
+  <div style="flex:1"></div>
+  <div class="langRow" style="margin-bottom:0">
+    <button class="langBtn sel" id="langCn">🇨🇳 中文</button>
+    <button class="langBtn" id="langEn">🇺🇸 English</button>
+  </div>
+</div>
 <h1 id="pgTitle">英雄卡通建模设计图</h1>
 <div class="sub" id="pgSub">Canyon Duel 角色概念稿 · 参照英雄联盟原设特征 · Canvas 矢量绘制</div>
-<div class="langRow">
-  <button class="langBtn sel" id="langCn">🇨🇳 中文</button>
-  <button class="langBtn" id="langEn">🇺🇸 English</button>
-</div>
 <canvas id="sheet" width="1280" height="620"></canvas>
 <script src="heroes.js"></script>
 <script>
@@ -106,6 +115,7 @@ function drawStatic(t) {
 }
 function applyLang() {
   document.getElementById('pgTitle').textContent = T().title;
+  document.getElementById('backBtn').textContent = LANG === 'cn' ? '← 返回初始页面' : '← Back to main page';
   document.getElementById('pgSub').textContent = T().sub;
   document.getElementById('langCn').classList.toggle('sel', LANG === 'cn');
   document.getElementById('langEn').classList.toggle('sel', LANG === 'en');
