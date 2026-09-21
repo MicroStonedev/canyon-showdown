@@ -260,9 +260,9 @@
 /* ================= 基础配置 ================= */
 const W = 2000, H = 900;                  // 世界尺寸（更长的横向战场）
 const WALL_T = 64;                        // 地图外围城墙带厚度（画面可见，角色不可进入）
-const LANES = [225, 675];                 // 上 / 下两路
+const LANES = [225, 675];                 // 上 / 下两路（间距保持不变）
 const TEAMCOL = ['#3f8cff', '#ff5252'];
-const TOWER = { hp: 2600, range: 330, dmg: 110, cd: 0.92, projSpeed: 400, r: 22 };
+const TOWER = { hp: 2600, range: 300, dmg: 110, cd: 0.92, projSpeed: 400, r: 22 };
 const CRYSTAL = { hp: 8000, r: 34, range: 380, dmg: 85, cd: 1.0 };
 
 // 岩石墙体：两路布局；蓝方侧定义，红方侧按中心对称（旋转180°）生成，保证两边绝对公平
@@ -271,32 +271,30 @@ const WALLS_BLUE = [
   { x: 380, y: 546, w: 130, h: 54 }, { x: 620, y: 498, w: 130, h: 52 },   // （上下镜像）
 ];
 const WALLS_MID = [
-  { x: 978, y: 130, w: 44, h: 190 }, { x: 978, y: 580, w: 44, h: 190 },   // 河道口岩石
+  { x: 978, y: 215, w: 44, h: 190 }, { x: 978, y: 495, w: 44, h: 190 },   // 河道口岩石
 ];
 const mirror = a => [...a, ...a.map(t => ({ x: W - t.x - t.w, y: H - t.y - t.h, w: t.w, h: t.h }))];
 
-// 草丛：围绕防御塔与河道布置——每座塔前方两丛夹道（蹲守/越塔点），河道口与基地出口各一丛，中心对称
+// 草丛：围绕防御塔与河道布置——每座塔前方两丛夹道（蹲守/越塔点），河道中草丛与基地出口各一丛，中心对称；均不与岩石重叠
 const BUSHES_BLUE = [
-  { x: 450, y: 115,  w: 120, h: 64 }, { x: 450, y: 271,  w: 120, h: 64 }, // 上路塔前上下
-  { x: 450, y: 565,  w: 120, h: 64 }, { x: 450, y: 721,  w: 120, h: 64 }, // 下路塔前上下
-  { x: 640, y: 390,  w: 120, h: 60 },                                     // 河道口
-  { x: 250, y: 385,  w: 110, h: 70 },                                     // 基地出口
+  { x: 450, y: 115,  w: 120, h: 64 }, { x: 450, y: 230,  w: 120, h: 64 }, // 上路塔前上下
+  { x: 450, y: 606,  w: 120, h: 64 }, { x: 450, y: 721,  w: 120, h: 64 }, // 下路塔前上下
+  { x: 940, y: 420,  w: 120, h: 60 },                                     // 河道中草丛（自对称）
+  { x: 250, y: 415,  w: 110, h: 70 },                                     // 基地出口
 ];
 
 // ===== 地图注册表（登录界面三选一） =====
 // 三张图共享相同的两路 / 防御塔 / 水晶 / 泉水坐标，仅地形、危险区与配色不同，保证平衡一致
 const LAVA_BLUE = [
   { x: 420, y: 385, w: 150, h: 130 },                                     // 两路之间野区中央大池
-  { x: 800, y: 90,  w: 120, h: 90 },                                      // 河道口上 / 下
-  { x: 800, y: 720, w: 120, h: 90 },
+  { x: 940, y: 130, w: 120, h: 90 },                                      // 河道口上（镜像自动生成下方）
 ];
 const JUNGLE_BUSHES = [
-  { x: 400, y: 90,  w: 170, h: 90 }, { x: 400, y: 275, w: 170, h: 90 },   // 塔前大丛
-  { x: 400, y: 535, w: 170, h: 90 }, { x: 400, y: 720, w: 170, h: 90 },
+  { x: 400, y: 50,  w: 170, h: 90 }, { x: 400, y: 190, w: 170, h: 90 },   // 塔前大丛
   { x: 630, y: 360, w: 160, h: 180 },                                     // 河道口巨型丛
   { x: 210, y: 350, w: 150, h: 200 },                                     // 基地出口巨型丛
-  { x: 820, y: 150, w: 140, h: 120 },                                     // 河道上下
-  { x: 820, y: 630, w: 140, h: 120 },
+  { x: 820, y: 60,  w: 140, h: 120 },                                     // 河道上下
+  { x: 820, y: 720, w: 140, h: 120 },
 ];
 const MAPS = [
   { key: 'grass', name: '草地', en: 'Grasslands',
@@ -476,7 +474,7 @@ const PICKUP_KINDS = [
 ];
 function randomPickupPos() {
   for (let i = 0; i < 30; i++) {
-    const x = 150 + Math.random() * 1700, y = 100 + Math.random() * 700;
+    const x = 100 + Math.random() * 1800, y = 100 + Math.random() * 700;
     if (WALLS.some(w => circleRectHit(x, y, 36, w))) continue;
     if (Math.hypot(x - 120, y - 450) < 230 || Math.hypot(x - 1880, y - 450) < 230) continue;  // 避开泉水
     if (pickups.some(p => Math.hypot(p.x - x, p.y - y) < 100)) continue;
@@ -1138,10 +1136,10 @@ function initWorld(playerRole) {
   player = champs[0];
 
   LANES.forEach(y => {
-    towers.push({ team: 0, x: 450,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方外塔
-    towers.push({ team: 0, x: 750,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方内塔
-    towers.push({ team: 1, x: 1250, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方内塔
-    towers.push({ team: 1, x: 1550, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方外塔
+    towers.push({ team: 0, x: 400,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方外塔
+    towers.push({ team: 0, x: 550,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方内塔
+    towers.push({ team: 1, x: 1450, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方内塔
+    towers.push({ team: 1, x: 1600, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方外塔
   });
   crystals = [
     { team: 0, x: 170,  y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0, assistLog: new Map() },
@@ -1444,12 +1442,12 @@ function hurtStruct(s, dmg, src, isCrystal) {
       giveXp(src, 170); participants.push(src);
       fx.push({ type: 'text', x: src.x, y: src.y - 30, txt: '+170 XP', color: '#ffd54f', life: 1 });
     }
-    champs.forEach(a => {
-      if (!src || a === src || a.dead || a.team !== src.team) return;
-      const t = s.assistLog.get(a);
-      if (t !== undefined && gameTime - t <= 8) {
-        giveXp(a, 100); participants.push(a);
-        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +100 XP', color: '#ffd54f', life: 1 });
+      champs.forEach(a => {
+        if (!src || a === src || a.dead || a.team !== src.team) return;
+        const t = s.assistLog ? s.assistLog.get(a) : undefined;   // 建筑（塔/水晶）也有助攻记录
+        if (t !== undefined && gameTime - t <= 8) {
+          giveXp(a, 100); participants.push(a);
+          fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +100 XP', color: '#ffd54f', life: 1 });
       }
     });
     Sfx.play('turretDown', s.x, s.y);
