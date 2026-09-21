@@ -23,6 +23,8 @@
   /* ===== ① 峡谷场景背景 ===== */
   #scene { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; display: block; }
   .wrap, footer { position: relative; z-index: 1; }
+  body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(1100px 620px at 50% 45%, rgba(10,15,24,.18) 0%, rgba(10,15,24,.5) 76%); }
 
   .wrap {
     width: 100%; max-width: 1180px;
@@ -156,6 +158,7 @@
 </footer>
 
 <script src="heroes.js"></script>
+<script src="scene.js?v=3"></script>
 <script>
 'use strict';
 /* ================= 画布与尺寸 ================= */
@@ -163,157 +166,15 @@ const dpr = Math.min(2, window.devicePixelRatio || 1);
 const scene = document.getElementById('scene'), sg = scene.getContext('2d');
 const heroCv = document.getElementById('hero'), hg = heroCv.getContext('2d');
 let SW = 0, SH = 0, HW = 260, HH = 300;
-function resize() {
+function resize() {                                 // 只管英雄展示台；峡谷场景由 CanyonScene 自管尺寸
   SW = window.innerWidth; SH = window.innerHeight;
-  scene.width = SW * dpr; scene.height = SH * dpr;
-  scene.style.width = SW + 'px'; scene.style.height = SH + 'px';
-  sg.setTransform(dpr, 0, 0, dpr, 0, 0);
   const narrow = SW < 900;
   HW = narrow ? 210 : 260; HH = narrow ? 245 : 300;
   heroCv.width = HW * dpr; heroCv.height = HH * dpr;
   heroCv.style.width = HW + 'px'; heroCv.style.height = HH + 'px';
   hg.setTransform(dpr, 0, 0, dpr, 0, 0);
-  buildScene();                                  // 山脊/星点按新尺寸重算
 }
 window.addEventListener('resize', resize);
-
-/* ================= ① 峡谷场景 ================= */
-const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-let ridges = [], stars = [], motes = [], bushes = [];
-function buildScene() {
-  const hz = SH * 0.62;                          // 地平线
-  // 灌木：沿近景山脊散布，填补画面下方的空地
-  bushes = Array.from({ length: 7 }, () => ({
-    x: Math.random() * SW, y: hz + 60 + Math.random() * (SH - hz - 50),
-    r: 12 + Math.random() * 16
-  }));
-  // 三层山脊：每条都是稳定的谐波曲线，只按视差整体平移，不会闪烁
-  const mk = (base, amp, seed, step) => {
-    const pts = [];
-    for (let x = -80; x <= SW + 80; x += step)
-      pts.push([x, base - amp * (0.55 * Math.sin(x * 0.0042 + seed)
-        + 0.3 * Math.sin(x * 0.0113 + seed * 2.3)
-        + 0.15 * Math.sin(x * 0.0231 + seed * 3.7))]);
-    return { pts, base, amp };
-  };
-  ridges = [ mk(hz + 6,  46, 1.7, 26), mk(hz + 26, 62, 4.2, 22), mk(hz + 54, 84, 6.1, 18) ];
-  stars = Array.from({ length: 70 }, () => ({
-    x: Math.random() * SW, y: Math.random() * hz * 0.9,
-    r: Math.random() * 1.1 + 0.3, p: Math.random() * 6.28, s: 0.6 + Math.random()
-  }));
-  motes = Array.from({ length: 54 }, () => ({
-    x: Math.random() * SW, y: Math.random() * SH,
-    r: Math.random() * 1.6 + 0.5, v: 5 + Math.random() * 14, p: Math.random() * 6.28
-  }));
-}
-function drawScene(t, mx, my) {
-  const hz = SH * 0.62;
-  // 天空
-  const sky = sg.createLinearGradient(0, 0, 0, SH);
-  sky.addColorStop(0, '#080c14'); sky.addColorStop(0.5, '#101927'); sky.addColorStop(1, '#18263c');
-  sg.fillStyle = sky; sg.fillRect(0, 0, SW, SH);
-  // 地平线辉光
-  const glow = sg.createRadialGradient(SW * 0.5, hz, 8, SW * 0.5, hz, SW * 0.6);
-  glow.addColorStop(0, 'rgba(96,158,200,.20)'); glow.addColorStop(1, 'rgba(96,158,200,0)');
-  sg.fillStyle = glow; sg.fillRect(0, 0, SW, SH);
-  // 星点（闪烁）
-  stars.forEach(s => {
-    const a = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * s.s + s.p));
-    sg.fillStyle = 'rgba(200,220,255,' + a.toFixed(3) + ')';
-    sg.beginPath(); sg.arc(s.x, s.y, s.r, 0, 7); sg.fill();
-  });
-  // 三层山脊（鼠标视差）
-  const cols = ['#131c2c', '#0f1624', '#0a1018'];
-  const depths = [10, 20, 34];
-  ridges.forEach((r, i) => {
-    const dx = mx * depths[i];
-    sg.fillStyle = cols[i];
-    sg.beginPath(); sg.moveTo(-80, SH);
-    r.pts.forEach(p => sg.lineTo(p[0] + dx, p[1]));
-    sg.lineTo(SW + 80, SH); sg.closePath(); sg.fill();
-  });
-  // 中央河道：两条波光带
-  const rw = Math.min(150, SW * 0.1), rcx = SW * 0.5 + mx * 26;
-  const rg = sg.createLinearGradient(0, hz + 30, 0, SH);
-  rg.addColorStop(0, '#20496e'); rg.addColorStop(1, '#14263c');
-  sg.fillStyle = rg;
-  sg.beginPath();
-  sg.moveTo(rcx - rw * 0.55, hz + 30);
-  sg.lineTo(rcx + rw * 0.55, hz + 30);
-  sg.lineTo(rcx + rw, SH); sg.lineTo(rcx - rw, SH);
-  sg.closePath(); sg.fill();
-  sg.strokeStyle = 'rgba(150,205,255,.16)'; sg.lineWidth = 2; sg.lineCap = 'round';
-  for (let i = 0; i < 5; i++) {
-    const y = hz + 40 + ((t * 26 + i * 46) % (SH - hz));
-    const k = (y - hz) / (SH - hz), w = rw * (0.5 + k);
-    sg.beginPath();
-    sg.moveTo(rcx - w + Math.sin(t * 2 + i) * 6, y);
-    sg.lineTo(rcx + w + Math.sin(t * 2 + i) * 6, y);
-    sg.stroke();
-  }
-  // 车道分隔线：两条平行于河道边缘的长线 + 等距横向刻度（像游戏里的兵线）
-  sg.strokeStyle = 'rgba(170,215,255,.13)'; sg.lineWidth = 1.5;
-  [0.28, 0.72].forEach(f => {
-    sg.beginPath();
-    sg.moveTo(rcx - rw * (1 - f), hz + 30);
-    sg.lineTo(rcx - rw * (2 * f), SH);
-    sg.stroke();
-    sg.beginPath();
-    sg.moveTo(rcx + rw * (1 - f), hz + 30);
-    sg.lineTo(rcx + rw * (2 * f), SH);
-    sg.stroke();
-  });
-  sg.strokeStyle = 'rgba(170,215,255,.10)'; sg.lineWidth = 2;
-  for (let y = hz + 56; y < SH; y += 54) {
-    const k = (y - hz) / (SH - hz), w = rw * (0.5 + k) * 0.82;
-    sg.beginPath(); sg.moveTo(rcx - w, y); sg.lineTo(rcx + w, y); sg.stroke();
-  }
-  // 地图装饰：外侧防御塔 + 灌木（填补左右下方的空地）
-  const tower = (x, y, sc) => {
-    sg.fillStyle = '#0c1320';
-    sg.fillRect(x - 9 * sc, y - 34 * sc, 18 * sc, 34 * sc);
-    sg.fillRect(x - 13 * sc, y - 41 * sc, 26 * sc, 8 * sc);
-    sg.fillRect(x - 4 * sc, y - 51 * sc, 8 * sc, 11 * sc);
-  };
-  tower(SW * 0.07, hz + 92, 1.15);
-  tower(SW * 0.93, hz + 92, 1.15);
-  sg.fillStyle = '#10241a';
-  bushes.forEach(b => {
-    sg.beginPath(); sg.ellipse(b.x, b.y, b.r, b.r * 0.5, 0, 0, 7); sg.fill();
-  });
-  // 双方水晶 + 防御塔剪影
-  const crystal = (x, col) => {
-    const pulse = 0.6 + 0.4 * Math.sin(t * 1.6 + x);
-    const y = hz + 34;
-    const cg = sg.createRadialGradient(x, y, 2, x, y, 70);
-    cg.addColorStop(0, col.replace('1)', (0.5 * pulse + 0.2).toFixed(2) + ')'));
-    cg.addColorStop(1, col.replace('1)', '0)'));
-    sg.fillStyle = cg;
-    sg.beginPath(); sg.arc(x, y, 70, 0, 7); sg.fill();
-    sg.fillStyle = col.replace('1)', '0.9)');
-    sg.beginPath();
-    sg.moveTo(x, y - 16); sg.lineTo(x + 9, y); sg.lineTo(x, y + 16); sg.lineTo(x - 9, y);
-    sg.closePath(); sg.fill();
-    // 塔剪影
-    sg.fillStyle = '#0d141f';
-    sg.fillRect(x + (x < SW / 2 ? 34 : -50), y - 26, 16, 26);
-    sg.fillRect(x + (x < SW / 2 ? 30 : -54), y - 32, 24, 7);
-  };
-  crystal(SW * 0.16 + mx * 14, 'rgba(63,140,255,1)');
-  crystal(SW * 0.84 + mx * 14, 'rgba(255,82,82,1)');
-  // 上浮光尘
-  motes.forEach(m => {
-    const y = reduced ? m.y : (m.y - t * m.v) % SH;
-    const yy = y < 0 ? y + SH : y;
-    const a = 0.12 + 0.3 * (0.5 + 0.5 * Math.sin(t * 1.4 + m.p));
-    sg.fillStyle = 'rgba(180,220,255,' + a.toFixed(3) + ')';
-    sg.beginPath(); sg.arc(m.x + Math.sin(t * 0.6 + m.p) * 8, yy, m.r, 0, 7); sg.fill();
-  });
-  // 暗角
-  const vg = sg.createRadialGradient(SW / 2, SH * 0.45, SH * 0.3, SW / 2, SH * 0.5, SW * 0.75);
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.62)');
-  sg.fillStyle = vg; sg.fillRect(0, 0, SW, SH);
-}
 
 /* ================= ③ 英雄展示台 ================= */
 const ORDER = ['marksman', 'assassin', 'tank', 'support'];
@@ -375,11 +236,10 @@ function frame(now) {
   tSec += dt;
   gameTime += dt;                                 // 推进模型动画时钟（声明在 heroes.js）
   heroStep(dt);
-  drawScene(tSec, (mouse.x - 0.5) * 2, (mouse.y - 0.5) * 2);
   drawHero();
   requestAnimationFrame(frame);
 }
-resize(); updateLabel(); requestAnimationFrame(frame);
+resize(); updateLabel(); CanyonScene.start(document.getElementById('scene')); requestAnimationFrame(frame);
 </script>
 </body>
 </html>
