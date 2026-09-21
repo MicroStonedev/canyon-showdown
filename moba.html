@@ -1136,10 +1136,10 @@ function initWorld(playerRole) {
   player = champs[0];
 
   LANES.forEach(y => {
-    towers.push({ team: 0, x: 400,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方外塔
-    towers.push({ team: 0, x: 550,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方内塔
-    towers.push({ team: 1, x: 1450, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方内塔
-    towers.push({ team: 1, x: 1600, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方外塔
+    towers.push({ team: 0, x: 350,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方外塔
+    towers.push({ team: 0, x: 700,  y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 蓝方内塔
+    towers.push({ team: 1, x: 1300, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方内塔
+    towers.push({ team: 1, x: 1650, y, hp: TOWER.hp, maxHp: TOWER.hp, cd: 0, alive: true, assistLog: new Map() });   // 红方外塔
   });
   crystals = [
     { team: 0, x: 170,  y: 450, hp: CRYSTAL.hp, maxHp: CRYSTAL.hp, cd: 0, assistLog: new Map() },
@@ -2165,25 +2165,39 @@ function draw() {
     bar(t.x, t.y - 88, 44, 5, t.hp / t.maxHp, TEAMCOL[t.team]);
   });
 
-  // 水晶
+  // 水晶（石制台阶基座 + 悬浮水晶簇，参照图二枢纽样式）
   crystals.forEach(cr => {
-    ctx.fillStyle = 'rgba(18,28,18,0.25)'; ctx.fillRect(cr.x - 26, cr.y - 2, 68, 68);   // 砖砌底座
-    ctx.fillStyle = '#e2a05a'; ctx.fillRect(cr.x - 34, cr.y - 34, 68, 60);
-    ctx.fillStyle = '#c9884a'; ctx.fillRect(cr.x - 34, cr.y + 26, 68, 12);
-    ctx.strokeStyle = 'rgba(178,116,58,0.6)'; ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(cr.x - 34, cr.y - 12); ctx.lineTo(cr.x + 34, cr.y - 12);
-    ctx.moveTo(cr.x, cr.y - 34); ctx.lineTo(cr.x, cr.y - 12);
-    ctx.moveTo(cr.x - 17, cr.y - 12); ctx.lineTo(cr.x - 17, cr.y + 2);
-    ctx.moveTo(cr.x + 17, cr.y - 12); ctx.lineTo(cr.x + 17, cr.y + 2);
-    ctx.stroke();
-    ctx.save(); ctx.translate(cr.x, cr.y - 14); ctx.rotate(Math.PI / 4);
-    ctx.shadowColor = TEAMCOL[cr.team]; ctx.shadowBlur = 22;
-    ctx.fillStyle = TEAMCOL[cr.team]; ctx.fillRect(-22, -22, 44, 44);
+    const teamCol = TEAMCOL[cr.team];
+    const fl = Math.sin(gameTime * 2 + cr.x * 0.01) * 3;          // 悬浮起伏
+    // 投影
+    ctx.fillStyle = 'rgba(15,20,15,0.3)';
+    ctx.beginPath(); ctx.ellipse(cr.x, cr.y + 26, 46, 13, 0, 0, 7); ctx.fill();
+    // 石制台阶基座（上层亮面 + 下层立面）
+    ctx.fillStyle = '#8a939e';
+    ctx.beginPath(); ctx.roundRect(cr.x - 34, cr.y - 16, 68, 26, 5); ctx.fill();
+    ctx.fillStyle = '#6b7280';
+    ctx.beginPath(); ctx.roundRect(cr.x - 40, cr.y + 8, 80, 20, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(cr.x - 40, cr.y + 8, 80, 4);
+    // 中央凹槽
+    ctx.fillStyle = '#565e6b';
+    ctx.beginPath(); ctx.roundRect(cr.x - 22, cr.y - 24, 44, 14, 4); ctx.fill();
+    // 主水晶（悬浮旋转菱形，队伍色 + 白芯）
+    ctx.save(); ctx.translate(cr.x, cr.y - 44 + fl); ctx.rotate(Math.PI / 4);
+    ctx.shadowColor = teamCol; ctx.shadowBlur = 24;
+    ctx.fillStyle = teamCol; ctx.fillRect(-15, -15, 30, 30);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(-6, -6, 12, 12);
     ctx.restore();
-    const cf = cr.hitT ? clamp(1 - (gameTime - cr.hitT) / 0.12, 0, 1) : 0;   // 受击白罩（0.12s 渐退）
-    if (cf > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * cf) + ')'; ctx.fillRect(cr.x - 34, cr.y - 36, 68, 66); }
-    bar(cr.x, cr.y - 46, 60, 7, cr.hp / cr.maxHp, TEAMCOL[cr.team]);
+    // 两侧护卫小晶体
+    for (const sd of [-1, 1]) {
+      ctx.save(); ctx.translate(cr.x + sd * 27, cr.y - 30 + fl * 0.6); ctx.rotate(sd * 0.6 + Math.PI / 4);
+      ctx.shadowColor = teamCol; ctx.shadowBlur = 10;
+      ctx.fillStyle = teamCol; ctx.fillRect(-6, -6, 12, 12);
+      ctx.restore();
+    }
+    // 受击白罩
+    const cf = cr.hitT ? clamp(1 - (gameTime - cr.hitT) / 0.12, 0, 1) : 0;
+    if (cf > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * cf) + ')'; ctx.fillRect(cr.x - 40, cr.y - 62, 80, 92); }
+    bar(cr.x, cr.y - 86, 60, 7, cr.hp / cr.maxHp, teamCol);
     ctx.fillStyle = '#9aa3b5'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(cr.team === 0 ? (CN() ? '蓝方水晶' : 'Blue Crystal') : (CN() ? '红方水晶' : 'Red Crystal'), cr.x, cr.y + 46);
   });
@@ -2284,13 +2298,27 @@ function draw() {
     ctx.restore();
     if (c.isPlayer) ctx.restore();
 
-    bar(c.x, c.y - 40 * s, 44, 5, c.hp / c.maxHp, c.team === 0 ? '#4caf50' : '#ff5252');
+    // 血条：左侧等级徽章 + 每 100 血分隔刻度（参照 LoL）
+    const bw = 44, by = c.y - 40 * s, bx = c.x - bw / 2;
+    ctx.fillStyle = '#14171f'; ctx.fillRect(bx - 1, by - 1, bw + 2, 7);
+    ctx.fillStyle = c.team === 0 ? '#4caf50' : '#ff5252';
+    ctx.fillRect(bx, by, bw * clamp(c.hp / c.maxHp, 0, 1), 5);
+    ctx.strokeStyle = 'rgba(10,12,16,0.8)'; ctx.lineWidth = 1;
+    for (let hp100 = 100; hp100 < c.maxHp; hp100 += 100) {
+      const tx = bx + bw * hp100 / c.maxHp;
+      ctx.beginPath(); ctx.moveTo(tx, by); ctx.lineTo(tx, by + 5); ctx.stroke();
+    }
+    // 等级徽章（血条左端）
+    ctx.fillStyle = '#14171f'; ctx.strokeStyle = c.team === 0 ? '#3f8cff' : '#ff5252'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(bx - 19, by - 2.5, 15, 10, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(c.lvl, bx - 11.5, by + 4.5);
     if (c.shield > 0) {                                  // 护盾条（黄色覆盖）
       ctx.fillStyle = '#ffd54f';
-      ctx.fillRect(c.x - 22, c.y - 41 * s, Math.min(44, 44 * c.shield / c.maxHp), 7);
+      ctx.fillRect(bx, by - 2, Math.min(bw, bw * c.shield / c.maxHp), 7);
     }
     ctx.fillStyle = '#9aa3b5'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(`Lv${c.lvl} ${c.name}`, c.x, c.y - 46 * s);
+    ctx.fillText(c.name, c.x, c.y - 46 * s);
   });
 
   // 钩绳
