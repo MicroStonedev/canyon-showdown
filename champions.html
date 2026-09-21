@@ -2,6 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <title>英雄卡通建模设计图</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -10,372 +12,146 @@
   h1 { color: #4caf50; font-size: 24px; margin-bottom: 4px; letter-spacing: 3px; }
   .sub { color: #9aa3b5; font-size: 13px; margin-bottom: 14px; }
   canvas { border-radius: 12px; }
+  .langRow { display: flex; gap: 10px; margin-bottom: 16px; }
+  .langBtn { background: #232936; color: #9aa3b5; border: 2px solid #333a4a; border-radius: 10px;
+    padding: 7px 22px; font-size: 14px; cursor: pointer; transition: all .15s; font-family: inherit; }
+  .langBtn:hover { border-color: #4caf5088; }
+  .langBtn.sel { border-color: #4caf50; color: #7ee08a; background: #213028; }
 </style>
 </head>
 <body>
-<h1>英雄卡通建模设计图</h1>
-<div class="sub">Canyon Duel 角色概念稿 · 参照英雄联盟原设特征 · Canvas 矢量绘制</div>
+<h1 id="pgTitle">英雄卡通建模设计图</h1>
+<div class="sub" id="pgSub">Canyon Duel 角色概念稿 · 参照英雄联盟原设特征 · Canvas 矢量绘制</div>
+<div class="langRow">
+  <button class="langBtn sel" id="langCn">🇨🇳 中文</button>
+  <button class="langBtn" id="langEn">🇺🇸 English</button>
+</div>
 <canvas id="sheet" width="1280" height="620"></canvas>
+<script src="heroes.js"></script>
 <script>
 'use strict';
+// 设计图直接复用游戏内的英雄模型（heroes.js），保证图纸和实际角色完全一致
 const cv = document.getElementById('sheet'), g = cv.getContext('2d');
+const SHEET = [
+  { role: 'marksman', name: '韦鲁斯', en: 'Varus',     sub: '射手 · 暗裔神射 · 长弓',      enSub: 'Marksman · Darkin · longbow',       col: '#b76ce9' },
+  { role: 'assassin',  name: '亚索',   en: 'Yasuo',     sub: '刺客 · 疾风剑豪 · 武士刀',    enSub: 'Assassin · wind swordsman · katana', col: '#a8e4ff' },
+  { role: 'support',   name: '萨勒芬妮', en: 'Seraphine', sub: '辅助 · 星籁歌姬 · 麦克风',  enSub: 'Support · songstress · microphone',  col: '#ff9ec4' },
+  { role: 'tank',      name: '布隆',   en: 'Braum',     sub: '坦克 · 冰霜守卫 · 巨门盾',    enSub: 'Tank · frost guardian · door shield', col: '#4a7fd4' },
+];
+// 中英文案
+const TXT = {
+  cn: {
+    title: '英雄卡通建模设计图',
+    sub: 'Canyon Duel 角色概念稿 · 参照英雄联盟原设特征 · Canvas 矢量绘制',
+    skill: (sk) => '【' + sk.name + '】 CD ' + sk.cd + 's',
+    desc: (sk) => sk.desc,
+    caps: ['普攻 · 3级技能【穿云箭】', '普攻近战 · 3级技能【影袭】',
+      '普攻治疗友军 · 技能【圣光波】', '普攻整圆范围 · 技能【震地】'],
+  },
+  en: {
+    title: 'Champion Design Sheet',
+    sub: 'Canyon Duel character concept art · inspired by League of Legends archetypes · drawn with Canvas',
+    skill: (sk) => '[' + sk.en + '] CD ' + sk.cd + 's',
+    desc: (sk) => sk.dEn,
+    caps: ['Basic attack · Lv3 skill [Piercing Arrow]', 'Melee basic attack · Lv3 skill [Shadow Dash]',
+      'Basics heal allies · skill [Light Wave]', '360° melee basics · skill [Seismic Slam]'],
+  },
+};
+let LANG = 'cn';
+const T = () => TXT[LANG];
+// 英文描述按词断行（中文按字数），最多三行
+function wrap(text, per) {
+  const out = []; let line = '';
+  text.split(/(?=[ ,])|\s+/).forEach(w => {   // 英文：按空格/标点切
+    line += w;
+    if (line.length >= per) { out.push(line.trim()); line = ''; }
+  });
+  if (line.trim()) out.push(line.trim());
+  return out;
+}
+const PW = 290, PH = 580, TOP = 20;             // 面板尺寸
+// 缩放与横向微调：按各英雄在完整攻击周期里的最坏外框标定（保证挥刀/举弓不溢出面板）
+// 刺客挥刀时外框最宽（6.5 倍下 293px 超出面板），故单独用 5.9
+const K = { marksman: 6.5, assassin: 5.9, support: 6.5, tank: 6.5 };
+const OX = { marksman: -39, assassin: -10, support: -26, tank: -29 };
 
-function panel(x, title, role, col) {
-  g.fillStyle = '#1e2330'; g.beginPath(); g.roundRect(x, 20, 290, 580, 16); g.fill();
-  g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); g.roundRect(x, 20, 290, 580, 16); g.stroke();
-  // 背景光圈
-  const gr = g.createRadialGradient(x + 145, 300, 20, x + 145, 300, 160);
-  gr.addColorStop(0, col + '33'); gr.addColorStop(1, '#1e233300');
-  g.fillStyle = gr; g.fillRect(x + 10, 130, 270, 340);
-  g.fillStyle = col; g.font = 'bold 20px "Microsoft YaHei"'; g.textAlign = 'center';
-  g.fillText(title, x + 145, 58);
-  g.fillStyle = '#9aa3b5'; g.font = '13px "Microsoft YaHei"';
-  g.fillText(role, x + 145, 82);
+/* ---- 静态层：面板、标题、技能说明（只画一次，缓存到离屏画布） ---- */
+const bg = document.createElement('canvas'); bg.width = 1280; bg.height = 620;
+const bgx = bg.getContext('2d');
+function drawStatic(t) {
+  t.fillStyle = '#14171f'; t.fillRect(0, 0, 1280, 620);
+  SHEET.forEach((s, i) => {
+    const x = 15 + i * 315, cx = x + PW / 2;
+    t.fillStyle = '#1e2330'; t.beginPath(); t.roundRect(x, TOP, PW, PH, 16); t.fill();
+    t.strokeStyle = s.col; t.lineWidth = 2; t.beginPath(); t.roundRect(x, TOP, PW, PH, 16); t.stroke();
+    const gr = t.createRadialGradient(cx, 330, 20, cx, 330, 170);
+    gr.addColorStop(0, s.col + '33'); gr.addColorStop(1, '#1e233000');
+    t.fillStyle = gr; t.fillRect(x + 10, 150, PW - 20, 360);
+    t.textAlign = 'center';
+    t.fillStyle = s.col; t.font = 'bold 22px "Microsoft YaHei"';
+    t.fillText(LANG === 'cn' ? s.name : s.en, cx, 62);
+    t.fillStyle = '#9aa3b5'; t.font = '13px "Microsoft YaHei"';
+    t.fillText(LANG === 'cn' ? s.sub : s.enSub, cx, 86);
+    // 技能说明（数值取自游戏内 ROLES，图纸与实际同步）
+    const sk = ROLES[s.role].skill;
+    t.fillStyle = '#ffd54f'; t.font = 'bold 14px "Microsoft YaHei"';
+    t.fillText(T().skill(sk), cx, 128);
+    t.fillStyle = '#8a93aa'; t.font = '12px "Microsoft YaHei"';
+    const lines = LANG === 'cn' ? wrap(T().desc(sk), 15) : wrap(T().desc(sk), 34);
+    lines.slice(0, 3).forEach((l, j) => t.fillText(l, cx, 152 + j * 18));
+  });
+  // 底部说明
+  t.fillStyle = '#9aa3b5'; t.font = '12px "Microsoft YaHei"'; t.textAlign = 'center';
+  SHEET.forEach((s, i) => t.fillText(T().caps[i], 15 + i * 315 + PW / 2, 578));
 }
-function shadow(cx, by, w) {
-  g.fillStyle = 'rgba(0,0,0,0.3)';
-  g.beginPath(); g.ellipse(cx, by + 4, w, 11, 0, 0, 7); g.fill();
+function applyLang() {
+  document.getElementById('pgTitle').textContent = T().title;
+  document.getElementById('pgSub').textContent = T().sub;
+  document.getElementById('langCn').classList.toggle('sel', LANG === 'cn');
+  document.getElementById('langEn').classList.toggle('sel', LANG === 'en');
+  drawStatic(bgx);                                       // 重绘静态层（面板文字随语言切换）
 }
-function limb(x1, y1, x2, y2, w, col) {
-  g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
-}
+document.getElementById('langCn').onclick = () => { LANG = 'cn'; applyLang(); };
+document.getElementById('langEn').onclick = () => { LANG = 'en'; applyLang(); };
+applyLang();
 
-/* ================= 韦鲁斯 · 暗裔神射手 ================= */
-function drawVarus(cx, by, k = 1) {
-  g.save(); g.translate(cx, by); g.scale(k, k);
-  shadow(0, 0, 42);
-  // 飘逸银白长发（后层）
-  g.fillStyle = '#c9cbe0';
-  g.beginPath();
-  g.moveTo(-24, -108); g.quadraticCurveTo(-40, -80, -34, -34);
-  g.quadraticCurveTo(-32, -20, -26, -12); g.lineTo(-12, -42);
-  g.closePath(); g.fill();
-  g.beginPath();
-  g.moveTo(24, -108); g.quadraticCurveTo(40, -80, 34, -34);
-  g.quadraticCurveTo(32, -20, 26, -12); g.lineTo(12, -42);
-  g.closePath(); g.fill();
-  // 腿 + 护胫
-  limb(-12, -30, -14, -6, 11, '#2b1d47'); limb(12, -30, 14, -6, 11, '#2b1d47');
-  g.fillStyle = '#191029';
-  g.beginPath(); g.roundRect(-22, -10, 18, 12, 4); g.fill();
-  g.beginPath(); g.roundRect(4, -10, 18, 12, 4); g.fill();
-  g.fillStyle = '#ff4d9e'; g.fillRect(-20, -6, 14, 3); g.fillRect(6, -6, 14, 3);
-  // 躯干（暗紫紧身甲）
-  g.fillStyle = '#33224f';
-  g.beginPath(); g.roundRect(-23, -78, 46, 52, 12); g.fill();
-  // 胸口品红水晶
-  g.save(); g.translate(0, -56); g.rotate(Math.PI / 4);
-  g.fillStyle = '#ff4d9e'; g.fillRect(-7, -7, 14, 14);
-  g.fillStyle = '#ffc2de'; g.fillRect(-3, -3, 6, 6);
-  g.restore();
-  // 腰带
-  g.fillStyle = '#191029'; g.fillRect(-23, -38, 46, 9);
-  g.fillStyle = '#ff4d9e'; g.beginPath(); g.arc(0, -33, 5, 0, 7); g.fill();
-  // 肩甲
-  g.fillStyle = '#191029';
-  g.beginPath(); g.arc(-22, -70, 10, 0, 7); g.fill();
-  g.beginPath(); g.arc(22, -70, 10, 0, 7); g.fill();
-  g.fillStyle = '#ff4d9e';
-  g.beginPath(); g.arc(-22, -70, 4, 0, 7); g.fill();
-  g.beginPath(); g.arc(22, -70, 4, 0, 7); g.fill();
-  // 右臂扶弓
-  limb(20, -66, -18, -58, 9, '#e8d5c0');
-  // 长弓（左手侧，暗紫弓臂 + 品红魔弦，搭着发光箭）
-  g.save(); g.translate(-32, -62); g.rotate(-0.08);
-  g.strokeStyle = '#241638'; g.lineWidth = 9; g.lineCap = 'round';
-  g.beginPath(); g.arc(0, 0, 52, -1.15, 1.15); g.stroke();
-  g.strokeStyle = '#241638'; g.lineWidth = 5;
-  g.beginPath(); g.arc(0, 0, 52, -1.15, 1.15); g.stroke();
-  g.strokeStyle = '#ff4d9e'; g.lineWidth = 2;
-  g.beginPath();
-  g.moveTo(Math.cos(-1.15) * 52, Math.sin(-1.15) * 52);
-  g.lineTo(-10, 0);
-  g.lineTo(Math.cos(1.15) * 52, Math.sin(1.15) * 52);
-  g.stroke();
-  g.shadowColor = '#ff4d9e'; g.shadowBlur = 12;
-  g.strokeStyle = '#ff8ac6'; g.lineWidth = 3.5;
-  g.beginPath(); g.moveTo(-10, 0); g.lineTo(58, 0); g.stroke();
-  g.fillStyle = '#ffc2de';
-  g.beginPath(); g.moveTo(66, 0); g.lineTo(54, -5); g.lineTo(54, 5); g.closePath(); g.fill();
-  g.restore();
-  // 左臂持弓
-  limb(-20, -66, -30, -60, 9, '#e8d5c0');
-  // 头 + 脸
-  g.fillStyle = '#f0dcc8'; g.beginPath(); g.arc(0, -100, 27, 0, 7); g.fill();
-  // 前发（银白斜刘海）
-  g.fillStyle = '#c9cbe0';
-  g.beginPath();
-  g.moveTo(-28, -104); g.quadraticCurveTo(-30, -132, 0, -130);
-  g.quadraticCurveTo(30, -132, 28, -104);
-  g.quadraticCurveTo(18, -116, 2, -112);
-  g.quadraticCurveTo(-14, -108, -28, -104);
-  g.closePath(); g.fill();
-  // 眼睛（锐利紫瞳）
-  g.fillStyle = '#b76ce9';
-  g.fillRect(-14, -102, 8, 3); g.fillRect(6, -102, 8, 3);
-  g.fillStyle = '#33224f'; g.fillRect(-13, -99, 6, 2); g.fillRect(7, -99, 6, 2);
-  // 面纹
-  g.strokeStyle = '#ff4d9e'; g.lineWidth = 1.5;
-  g.beginPath(); g.moveTo(-18, -94); g.lineTo(-12, -92); g.stroke();
-  g.beginPath(); g.moveTo(18, -94); g.lineTo(12, -92); g.stroke();
-  g.restore();
+/* ---- 动态层：四个英雄模型（与游戏内同一份代码） ---- */
+const mocks = {};
+SHEET.forEach(s => {
+  mocks[s.role] = { role: s.role, team: 0, vx: 0, vy: 0, vaim: -0.35, aim: -0.35, walkPhase: 0,
+    atkCdT: ROLES[s.role].atkCd * 0.82,            // 停在拉弦/挥击前摇，展示武器姿态
+    skillAnimT: 0, stealthT: 0, shield: 0, speedT: 0, sprintT: 0, slowT: 0,
+    isPlayer: false, lastCombat: 0, bowRaise: 1, lvl: 5, hp: 1, maxHp: 1, dead: false };
+});
+function drawModel(role, alpha, t) {
+  const c = mocks[role];
+  if (role === 'marksman') drawMarksmanModel(c, alpha, t);
+  else if (role === 'assassin') drawAssassinModel(c, alpha, t);
+  else if (role === 'tank') drawTankModel(c, alpha, t);
+  else drawSupportModel(c, alpha, t);
 }
-
-/* ================= 亚索 · 疾风剑豪 ================= */
-function drawYasuo(cx, by, k = 1) {
-  g.save(); g.translate(cx, by); g.scale(k, k);
-  shadow(0, 0, 42);
-  // 马尾（后层，向右飘）
-  g.fillStyle = '#26262b';
-  g.beginPath();
-  g.moveTo(14, -110); g.quadraticCurveTo(52, -100, 60, -52);
-  g.quadraticCurveTo(62, -34, 50, -26);
-  g.quadraticCurveTo(48, -60, 20, -86);
-  g.closePath(); g.fill();
-  // 腿（和服裤）
-  limb(-12, -30, -15, -6, 13, '#8f734d'); limb(12, -30, 16, -6, 13, '#8f734d');
-  g.fillStyle = '#4a3b2a';
-  g.beginPath(); g.roundRect(-23, -11, 19, 13, 4); g.fill();
-  g.beginPath(); g.roundRect(6, -11, 19, 13, 4); g.fill();
-  // 躯干（棕褐和服）
-  g.fillStyle = '#c49a6c';
-  g.beginPath(); g.roundRect(-24, -78, 48, 52, 10); g.fill();
-  // 和服交领
-  g.strokeStyle = '#4a3b2a'; g.lineWidth = 5; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(-14, -76); g.lineTo(4, -52); g.stroke();
-  g.beginPath(); g.moveTo(14, -76); g.lineTo(4, -52); g.stroke();
-  // 腰带
-  g.fillStyle = '#4a3b2a'; g.fillRect(-24, -40, 48, 11);
-  g.fillStyle = '#d4af37'; g.fillRect(-6, -40, 12, 11);
-  // 刀鞘（腰间斜挂）
-  g.strokeStyle = '#3a3026'; g.lineWidth = 7;
-  g.beginPath(); g.moveTo(-26, -34); g.lineTo(10, -48); g.stroke();
-  g.fillStyle = '#d4af37'; g.beginPath(); g.arc(-26, -34, 4.5, 0, 7); g.fill();
-  // 右臂持刀（刀指斜前）
-  limb(18, -68, 40, -52, 9, '#e8c39a');
-  // 武士刀
-  g.strokeStyle = '#dfe6ee'; g.lineWidth = 5; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(38, -54); g.lineTo(92, -92); g.stroke();
-  g.strokeStyle = '#ffffff'; g.lineWidth = 1.6;
-  g.beginPath(); g.moveTo(40, -56); g.lineTo(90, -92); g.stroke();
-  g.fillStyle = '#d4af37'; g.beginPath(); g.arc(37, -53, 6, 0, 7); g.fill();
-  g.strokeStyle = '#4a3b2a'; g.lineWidth = 5;
-  g.beginPath(); g.moveTo(36, -52); g.lineTo(24, -44); g.stroke();
-  // 疾风环绕
-  g.strokeStyle = '#a8e4ff'; g.lineWidth = 2.5;
-  g.beginPath(); g.arc(78, -100, 20, -0.5, 1.6); g.stroke();
-  g.beginPath(); g.arc(60, -108, 12, 2.6, 4.2); g.stroke();
-  // 左臂
-  limb(-18, -68, -34, -46, 9, '#e8c39a');
-  g.fillStyle = '#e8c39a'; g.beginPath(); g.arc(-34, -46, 5, 0, 7); g.fill();
-  // 头 + 脸
-  g.fillStyle = '#f2d8b8'; g.beginPath(); g.arc(0, -100, 27, 0, 7); g.fill();
-  // 黑发 + 发髻
-  g.fillStyle = '#26262b';
-  g.beginPath();
-  g.moveTo(-28, -102); g.quadraticCurveTo(-30, -132, 0, -130);
-  g.quadraticCurveTo(30, -132, 26, -100);
-  g.quadraticCurveTo(14, -114, 0, -112);
-  g.quadraticCurveTo(-14, -110, -28, -102);
-  g.closePath(); g.fill();
-  g.beginPath(); g.arc(16, -124, 8, 0, 7); g.fill();
-  // 眼睛
-  g.fillStyle = '#5b3d20'; g.fillRect(-14, -102, 8, 3); g.fillRect(6, -102, 8, 3);
-  // 腮上胡茬
-  g.strokeStyle = 'rgba(70,50,30,0.6)'; g.lineWidth = 1.4;
-  g.beginPath(); g.moveTo(-12, -90); g.lineTo(-4, -88); g.stroke();
-  g.beginPath(); g.moveTo(12, -90); g.lineTo(4, -88); g.stroke();
-  g.restore();
+function drawHeroes() {
+  SHEET.forEach((s, i) => {
+    const cx = 15 + i * 315 + PW / 2 + OX[s.role], by = 512;   // 上移：脚下队伍环不再压到底部说明文字
+    g.save();
+    g.translate(cx, by); g.scale(K[s.role], K[s.role]);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    // 地面投影（与游戏内一致）
+    g.fillStyle = 'rgba(15,25,18,0.28)';
+    g.beginPath(); g.ellipse(0, 2, 11 * (ROLES[s.role].r / 15), 4.5 * (ROLES[s.role].r / 15), 0, 0, 7); g.fill();
+    drawModel(s.role, 1, g);
+    g.restore();
+  });
 }
-
-/* ================= 萨勒芬妮 · 星籁歌姬 ================= */
-function drawSeraphine(cx, by, k = 1) {
-  g.save(); g.translate(cx, by); g.scale(k, k);
-  shadow(0, 0, 40);
-  // 双马尾（后层，粉→青渐变尾梢）
-  for (const side of [-1, 1]) {
-    g.fillStyle = '#ff9ec4';
-    g.beginPath();
-    g.moveTo(side * 20, -112);
-    g.quadraticCurveTo(side * 46, -90, side * 38, -40);
-    g.quadraticCurveTo(side * 34, -22, side * 26, -14);
-    g.lineTo(side * 16, -44);
-    g.closePath(); g.fill();
-    g.fillStyle = '#7ec8ff';
-    g.beginPath();
-    g.moveTo(side * 34, -50);
-    g.quadraticCurveTo(side * 34, -30, side * 26, -14);
-    g.lineTo(side * 18, -40);
-    g.closePath(); g.fill();
-  }
-  // 腿 + 粉靴
-  limb(-10, -28, -12, -6, 10, '#ffe3ee'); limb(10, -28, 12, -6, 10, '#ffe3ee');
-  g.fillStyle = '#ff5fa8';
-  g.beginPath(); g.roundRect(-20, -10, 17, 12, 5); g.fill();
-  g.beginPath(); g.roundRect(4, -10, 17, 12, 5); g.fill();
-  // 连衣裙（上白下粉裙摆）
-  g.fillStyle = '#ffffff';
-  g.beginPath(); g.roundRect(-19, -76, 38, 30, 10); g.fill();
-  g.fillStyle = '#ff9ec4';
-  g.beginPath();
-  g.moveTo(-20, -50); g.lineTo(20, -50);
-  g.lineTo(30, -20); g.quadraticCurveTo(0, -12, -30, -20);
-  g.closePath(); g.fill();
-  g.fillStyle = '#ffffff'; g.fillRect(-27, -24, 54, 5);
-  // 裙上星星
-  g.fillStyle = '#ffd54f';
-  for (const [sx, sy] of [[-12, -36], [6, -30], [16, -42]])
-    { g.beginPath(); g.arc(sx, sy, 2.5, 0, 7); g.fill(); }
-  // 胸口星
-  g.fillStyle = '#ffd54f';
-  g.save(); g.translate(0, -62); g.rotate(0.4);
-  g.fillRect(-5, -1.5, 10, 3); g.fillRect(-1.5, -5, 3, 10);
-  g.restore();
-  // 手持麦克风（右手举到嘴边）
-  limb(14, -66, 26, -84, 8, '#ffe3ee');
-  g.strokeStyle = '#3a3f4a'; g.lineWidth = 4.5; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(27, -84); g.lineTo(33, -96); g.stroke();
-  g.fillStyle = '#ff5fa8'; g.beginPath(); g.arc(34, -99, 6.5, 0, 7); g.fill();
-  g.fillStyle = '#ffd0e6'; g.beginPath(); g.arc(32.5, -100.5, 2.5, 0, 7); g.fill();
-  // 左臂外展
-  limb(-14, -66, -30, -52, 8, '#ffe3ee');
-  g.fillStyle = '#ffe3ee'; g.beginPath(); g.arc(-30, -52, 5, 0, 7); g.fill();
-  // 头 + 脸（大眼睛开心）
-  g.fillStyle = '#ffe0ea'; g.beginPath(); g.arc(0, -100, 27, 0, 7); g.fill();
-  // 刘海
-  g.fillStyle = '#ff9ec4';
-  g.beginPath();
-  g.moveTo(-28, -102); g.quadraticCurveTo(-30, -132, 0, -130);
-  g.quadraticCurveTo(30, -132, 28, -102);
-  g.quadraticCurveTo(16, -114, 2, -110);
-  g.quadraticCurveTo(-14, -106, -28, -102);
-  g.closePath(); g.fill();
-  // 大眼睛（粉瞳 + 高光）
-  g.fillStyle = '#ff5fa8';
-  g.beginPath(); g.arc(-11, -98, 5, 0, 7); g.fill();
-  g.beginPath(); g.arc(11, -98, 5, 0, 7); g.fill();
-  g.fillStyle = '#ffffff';
-  g.beginPath(); g.arc(-12.5, -99.5, 2, 0, 7); g.fill();
-  g.beginPath(); g.arc(9.5, -99.5, 2, 0, 7); g.fill();
-  g.strokeStyle = '#e8579a'; g.lineWidth = 1.6;
-  g.beginPath(); g.arc(0, -90, 5, 0.3, 2.8); g.stroke();   // 微笑
-  // 头戴音箱耳机
-  g.strokeStyle = '#ff5fa8'; g.lineWidth = 4;
-  g.beginPath(); g.arc(0, -104, 29, Math.PI * 1.08, Math.PI * 1.92); g.stroke();
-  g.fillStyle = '#ff5fa8';
-  g.beginPath(); g.arc(-27, -100, 8, 0, 7); g.fill();
-  g.beginPath(); g.arc(27, -100, 8, 0, 7); g.fill();
-  g.fillStyle = '#ffd0e6';
-  g.beginPath(); g.arc(-27, -100, 3.5, 0, 7); g.fill();
-  g.beginPath(); g.arc(27, -100, 3.5, 0, 7); g.fill();
-  // 漂浮音符
-  g.fillStyle = '#7ec8ff'; g.font = 'bold 22px sans-serif';
-  g.fillText('♪', 44, -118);
-  g.fillStyle = '#ff9ec4'; g.fillText('♫', -52, -102);
-  g.fillStyle = '#ffd54f'; g.font = '16px sans-serif';
-  g.fillText('♪', -58, -132);
-  // 小星星
-  g.fillStyle = '#ffd54f';
-  g.beginPath(); g.arc(50, -70, 2.5, 0, 7); g.fill();
-  g.beginPath(); g.arc(-44, -58, 2, 0, 7); g.fill();
-  g.restore();
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  gameTime += dt;                                    // 推进模型待机动画（呼吸/摆动）
+  g.drawImage(bg, 0, 0);
+  drawHeroes();
+  requestAnimationFrame(frame);
 }
-
-/* ================= 布隆 · 弗雷尔卓德之心 ================= */
-function drawBraum(cx, by, k = 1) {
-  g.save(); g.translate(cx, by); g.scale(k, k);
-  shadow(0, 0, 52);
-  // 腿（壮汉粗腿）
-  limb(-14, -26, -16, -6, 15, '#3a5ca8'); limb(14, -26, 16, -6, 15, '#3a5ca8');
-  g.fillStyle = '#2c3e50';
-  g.beginPath(); g.roundRect(-26, -10, 21, 12, 4); g.fill();
-  g.beginPath(); g.roundRect(5, -10, 21, 12, 4); g.fill();
-  // 宽厚躯干（蓝色战装）
-  g.fillStyle = '#4a7fd4';
-  g.beginPath(); g.roundRect(-30, -76, 60, 54, 14); g.fill();
-  // 毛边领口 + 下摆
-  g.fillStyle = '#f0f4fa';
-  g.beginPath(); g.roundRect(-30, -76, 60, 14, 7); g.fill();
-  g.beginPath(); g.roundRect(-30, -30, 60, 10, 5); g.fill();
-  // 胸口冰晶纹
-  g.fillStyle = '#a8dcff';
-  g.save(); g.translate(6, -54); g.rotate(0.2);
-  g.fillRect(-2, -7, 4, 14); g.fillRect(-6, -3, 12, 4);
-  g.restore();
-  // 右臂握拳上举
-  limb(24, -66, 38, -84, 11, '#f2d8b8');
-  g.fillStyle = '#f2d8b8'; g.beginPath(); g.arc(40, -88, 7.5, 0, 7); g.fill();
-  // 巨门盾（左手侧，占半身）
-  g.save(); g.translate(-30, -52); g.rotate(-0.06);
-  g.fillStyle = '#97a0b4';
-  g.beginPath(); g.roundRect(-24, -46, 48, 94, 12); g.fill();
-  g.strokeStyle = '#6e7890'; g.lineWidth = 3;
-  g.beginPath(); g.roundRect(-24, -46, 48, 94, 12); g.stroke();
-  ctx_studs();
-  function ctx_studs() {
-    g.fillStyle = '#6e7890';
-    for (const [px, py] of [[-16, -36], [16, -36], [-16, 38], [16, 38], [-16, 0], [16, 0]])
-      { g.beginPath(); g.arc(px, py, 2.5, 0, 7); g.fill(); }
-  }
-  // 盾心金徽
-  g.fillStyle = '#d4af37'; g.beginPath(); g.arc(0, 0, 11, 0, 7); g.fill();
-  g.strokeStyle = '#b8912e'; g.lineWidth = 2;
-  g.beginPath(); g.arc(0, 0, 7, 0, 7); g.stroke();
-  g.fillStyle = '#d4af37'; g.fillRect(-1.5, -13, 3, 26); g.fillRect(-9, -5, 18, 3);
-  g.restore();
-  // 左臂扶盾
-  limb(-24, -66, -32, -56, 11, '#f2d8b8');
-  // 头 + 脸
-  g.fillStyle = '#f2d8b8'; g.beginPath(); g.arc(0, -98, 27, 0, 7); g.fill();
-  // 金色短发
-  g.fillStyle = '#e8b84b';
-  g.beginPath();
-  g.moveTo(-26, -104); g.quadraticCurveTo(-26, -128, 0, -126);
-  g.quadraticCurveTo(26, -128, 26, -104);
-  g.quadraticCurveTo(12, -116, 0, -114);
-  g.quadraticCurveTo(-12, -116, -26, -104);
-  g.closePath(); g.fill();
-  // 浓眉
-  g.fillStyle = '#c99a2e'; g.fillRect(-16, -104, 12, 4); g.fillRect(4, -104, 12, 4);
-  // 眼睛
-  g.fillStyle = '#3a5ca8'; g.fillRect(-12, -98, 7, 3); g.fillRect(5, -98, 7, 3);
-  // 标志性金色大胡子（两撇上翘 + 下垂）
-  g.fillStyle = '#e8b84b';
-  g.beginPath();
-  g.moveTo(-4, -92); g.quadraticCurveTo(-16, -94, -22, -84);
-  g.quadraticCurveTo(-26, -76, -20, -70);
-  g.quadraticCurveTo(-14, -78, -4, -84);
-  g.closePath(); g.fill();
-  g.beginPath();
-  g.moveTo(4, -92); g.quadraticCurveTo(16, -94, 22, -84);
-  g.quadraticCurveTo(26, -76, 20, -70);
-  g.quadraticCurveTo(14, -78, 4, -84);
-  g.closePath(); g.fill();
-  g.beginPath(); g.ellipse(0, -80, 8, 6, 0, 0, 7); g.fill();
-  // 脚边小冰晶
-  g.fillStyle = '#a8dcff';
-  g.beginPath();
-  g.moveTo(34, -4); g.lineTo(38, -16); g.lineTo(42, -4); g.closePath(); g.fill();
-  g.beginPath();
-  g.moveTo(-42, -4); g.lineTo(-38, -13); g.lineTo(-34, -4); g.closePath(); g.fill();
-  g.restore();
-}
-
-/* ================= 组装设计图 ================= */
-g.fillStyle = '#14171f'; g.fillRect(0, 0, 1280, 620);
-panel(15,  '韦鲁斯', '射手 · 暗裔神射 · 长弓',        '#b76ce9');
-panel(330, '亚索',   '刺客 · 疾风剑豪 · 武士刀',      '#a8e4ff');
-panel(645, '萨勒芬妮','辅助 · 星籁歌姬 · 麦克风',      '#ff9ec4');
-panel(960, '布隆',   '坦克 · 冰霜守卫 · 巨门盾',      '#4a7fd4');
-drawVarus(160, 545, 1.6);
-drawYasuo(475, 545, 1.6);
-drawSeraphine(790, 545, 1.6);
-drawBraum(1105, 545, 1.6);
-// 底部技能条说明
-g.fillStyle = '#9aa3b5'; g.font = '12px "Microsoft YaHei"'; g.textAlign = 'center';
-g.fillText('普攻', 160, 560); g.fillText('普攻 · 3级技能【疾风绝息】', 475, 560);
-g.fillText('普攻治疗友军 · 技能【圣光波】', 790, 560); g.fillText('普攻整圆范围 · 技能【震地】', 1105, 560);
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
