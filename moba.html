@@ -87,56 +87,139 @@
   #augCards .augCard p { font-size: 13px; color: #cfd6e4; line-height: 1.7; }
   #augOwned { display: flex; gap: 3px; font-size: 17px; min-width: 34px; justify-content: center; }
 
+  /* ===== 登录/选人界面的峡谷夜景背景 ===== */
+  #bgScene, #bgMap, #bgHero { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 5; display: none; }
+  #bgScene.on, #bgMap.on, #bgHero.on { display: block; }
+  #bgMap { opacity: .95; }
+  #bgHero { opacity: .3; }
+  .overlay::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(1150px 640px at 50% 42%, rgba(13,18,25,.10) 0%, rgba(13,18,25,.34) 76%); }
+
   /* ===== 居中提示 ===== */
   #centerMsg { position: absolute; top: 34%; left: 50%; transform: translate(-50%,-50%);
     font-size: 40px; font-weight: bold; color: #fff; text-shadow: 0 0 18px #000; display: none; pointer-events: none; }
 
   /* ===== 选人界面 ===== */
-  .overlay { position: absolute; inset: 0; background: #14171ff2; display: flex;
-    flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
-  .overlay h1 { font-size: 34px; color: #4caf50; letter-spacing: 4px; margin-bottom: 6px; }
-  .overlay .sub { color: #9aa3b5; margin-bottom: 26px; font-size: 14px; }
-  #roleCards { display: flex; gap: 16px; margin-bottom: 26px; }
-  .card { width: 190px; background: #1e2330; border: 2px solid #333a4a; border-radius: 12px;
-    padding: 16px; cursor: pointer; transition: all .15s; }
-  .card:hover { border-color: #4caf50; transform: translateY(-4px); }
-  .card.sel { border-color: #4caf50; background: #213028; box-shadow: 0 0 14px #4caf5055; }
-  .card .face { font-size: 30px; text-align: center; margin-bottom: 6px; }
-  .card h3 { text-align: center; font-size: 18px; margin-bottom: 8px; }
-  .card .st { font-size: 12px; color: #9aa3b5; line-height: 1.8; }
-  .card .sk { font-size: 12px; color: #ffd54f; margin-top: 8px; line-height: 1.5; }
-  .bigBtn { background: #4caf50; color: #fff; border: none; padding: 13px 60px; border-radius: 10px;
-    font-size: 19px; cursor: pointer; }
-  .bigBtn:hover { background: #5fc262; }
-  .bigBtn:disabled { background: #3a3f4b; cursor: not-allowed; }
-  .ctrlTip { margin-top: 22px; color: #7a8194; font-size: 13px; line-height: 2; text-align: center; }
+  /* 背景画布（地图/峡谷场景/英雄淡影）在 z-index 5，overlay 自身不再刷不透明底色，
+     可读性由 .overlay::after 的径向遮罩负责 */
+  .overlay { position: absolute; inset: 0; background: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;
+    animation: ovIn .28s ease both; }
+  @keyframes ovIn { from { opacity: 0; transform: scale(1.012); } to { opacity: 1; transform: none; } }
+  .overlay h1 { font-size: 42px; letter-spacing: 7px; margin-bottom: 8px;
+    background: linear-gradient(180deg, #ffffff 26%, #b9f6ca 96%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 22px rgba(76,175,80,.4)); }
+  .overlay .sub { color: #9aa3b5; margin-bottom: 24px; font-size: 14px; letter-spacing: 1px; }
+  #roleCards { display: flex; gap: 18px; margin-bottom: 28px; }
+  .card { width: 206px; background: linear-gradient(180deg, #222a3a 0%, #1a202c 100%);
+    border: 2px solid #333a4a; border-radius: 16px; padding: 16px 14px 14px; cursor: pointer;
+    transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35); position: relative; overflow: hidden; }
+  .card::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px;
+    background: linear-gradient(90deg, transparent, #4caf50, transparent); opacity: 0; transition: opacity .16s; }
+  .card:hover { border-color: #4caf5088; transform: translateY(-5px); box-shadow: 0 12px 28px rgba(0,0,0,.45); }
+  .card.sel { border-color: #4caf50; background: linear-gradient(180deg, #24352b 0%, #1a2a20 100%);
+    box-shadow: 0 0 0 1px #4caf5066, 0 10px 30px rgba(76,175,80,.22); }
+  .card.sel::before { opacity: 1; }
+  .card .face { text-align: center; margin-bottom: 8px;
+    background: radial-gradient(60px 54px at 50% 58%, rgba(76,175,80,.16), transparent 70%); border-radius: 12px; }
+  .card h3 { text-align: center; font-size: 18px; margin-bottom: 8px; letter-spacing: 1px; }
+  .card .st { font-size: 12px; color: #9aa3b5; line-height: 1.85; }
+  .card .sk { font-size: 12px; color: #ffd54f; margin-top: 8px; line-height: 1.5;
+    padding-top: 8px; border-top: 1px solid #2b3242; }
+  .bigBtn { background: linear-gradient(135deg, #4caf50, #2e7d32); color: #fff;
+    border: 1px solid #66bb6a; padding: 14px 62px; border-radius: 12px; font-size: 19px;
+    letter-spacing: 2px; cursor: pointer; box-shadow: 0 6px 22px rgba(76,175,80,.3), inset 0 1px 0 rgba(255,255,255,.22);
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+    animation: btnBreathe 2.8s ease-in-out infinite; }
+  @keyframes btnBreathe {
+    0%, 100% { box-shadow: 0 6px 20px rgba(76,175,80,.26), inset 0 1px 0 rgba(255,255,255,.22); }
+    50%      { box-shadow: 0 8px 32px rgba(76,175,80,.5), inset 0 1px 0 rgba(255,255,255,.22); } }
+  .bigBtn:hover { filter: brightness(1.09); transform: translateY(-2px); }
+  .bigBtn:active { transform: translateY(0) scale(.985); }
+  .bigBtn:disabled { background: #3a3f4b; border-color: #3a3f4b; cursor: not-allowed;
+    animation: none; box-shadow: none; color: #7a8194; }
+  .ctrlTip { margin-top: 24px; color: #7a8194; font-size: 13px; line-height: 2; text-align: center;
+    max-width: 760px; padding: 14px 22px; border-radius: 12px; background: #161c26aa; border: 1px solid #262d3b; }
   .ctrlTip b { color: #cfd6e4; background: #2b3242; padding: 1px 7px; border-radius: 4px; margin: 0 2px; }
 
   /* ===== 登录界面 ===== */
   .langRow { display: flex; gap: 12px; margin-bottom: 26px; }
   .langBtn { background: #232936; color: #9aa3b5; border: 2px solid #333a4a; border-radius: 10px;
-    padding: 10px 26px; font-size: 16px; cursor: pointer; transition: all .15s; }
-  .langBtn:hover { border-color: #4caf5088; }
-  .langBtn.sel { border-color: #4caf50; color: #7ee08a; background: #213028; }
+    padding: 10px 28px; font-size: 16px; cursor: pointer; transition: all .16s ease; }
+  .langBtn:hover { border-color: #4caf5088; transform: translateY(-1px); }
+  .langBtn.sel { border-color: #4caf50; color: #7ee08a; background: #213028;
+    box-shadow: 0 0 16px rgba(76,175,80,.28); }
 
   /* ===== 地图选择 ===== */
-  #mapGrid { display: flex; gap: 14px; margin-bottom: 10px; }
-  .mapCard { background: #1e2330; border: 2px solid #333a4a; border-radius: 12px; padding: 8px;
-    cursor: pointer; transition: all .15s; text-align: center; }
-  .mapCard:hover { border-color: #4caf5088; transform: translateY(-3px); }
-  .mapCard.sel { border-color: #4caf50; background: #213028; box-shadow: 0 0 14px #4caf5055; }
-  .mapCard canvas { display: block; border-radius: 7px; width: 178px; height: 80px; }
-  .mapCard .nm { font-size: 13px; color: #cfd6e4; margin-top: 6px; }
+  #mapGrid { display: flex; gap: 16px; margin-bottom: 14px; }
+  .mapCard { position: relative; background: linear-gradient(180deg, #222a3a 0%, #1a202c 100%);
+    border: 2px solid #333a4a; border-radius: 14px; padding: 9px; cursor: pointer; text-align: center;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+    transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+  .mapCard:hover { border-color: #4caf5088; transform: translateY(-4px); box-shadow: 0 12px 26px rgba(0,0,0,.45); }
+  .mapCard.sel { border-color: #4caf50; box-shadow: 0 0 0 1px #4caf5066, 0 10px 28px rgba(76,175,80,.22); }
+  .mapCard.sel::after { content: '✓'; position: absolute; top: 14px; right: 16px; width: 22px; height: 22px;
+    border-radius: 50%; background: #4caf50; color: #fff; font-size: 13px; line-height: 22px;
+    box-shadow: 0 2px 8px rgba(76,175,80,.5); }
+  .mapCard canvas { display: block; border-radius: 8px; width: 208px; height: 96px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+  .mapCard .nm { font-size: 14px; color: #cfd6e4; margin-top: 8px; letter-spacing: 1px; }
   .mapCard.sel .nm { color: #7ee08a; }
-  #mapDesc { min-height: 40px; max-width: 620px; color: #9aa3b5; font-size: 13px; line-height: 1.6;
-    text-align: center; margin-bottom: 18px; }
+  #mapDesc { min-height: 40px; max-width: 640px; color: #9aa3b5; font-size: 13px; line-height: 1.7;
+    text-align: center; margin-bottom: 20px; padding: 10px 18px; border-radius: 10px;
+    background: #161c26aa; border: 1px solid #262d3b; }
   #mapDesc b { color: #cfd6e4; }
   .loginBox { display: flex; flex-direction: column; align-items: center; gap: 10px; }
   .loginLab { color: #9aa3b5; font-size: 14px; }
-  #userName { background: #1e2330; border: 2px solid #333a4a; border-radius: 10px; color: #fff;
-    font-size: 20px; padding: 12px 20px; width: 320px; text-align: center; outline: none; }
-  #userName:focus { border-color: #4caf50; }
+  #userName { background: #1a202c; border: 2px solid #333a4a; border-radius: 12px; color: #fff;
+    font-size: 20px; padding: 13px 22px; width: 340px; text-align: center; outline: none;
+    letter-spacing: 2px; transition: border-color .16s ease, box-shadow .16s ease; }
+  #userName:focus { border-color: #4caf50; box-shadow: 0 0 0 3px rgba(76,175,80,.16); }
+  #userName::placeholder { color: #5c6577; letter-spacing: 1px; }
   #loginErr { color: #ff6b6b; font-size: 13px; min-height: 18px; margin-top: 6px; }
+
+  /* ===== 结束游戏确认 ===== */
+  #quitBtn { position: fixed; top: 60px; right: 12px; z-index: 40; width: 42px; height: 42px;
+    border-radius: 50%; background: #1e2330cc; border: 2px solid #333a4a; color: #9aa3b5;
+    font-size: 17px; cursor: pointer; transition: all .15s; display: none; }
+  #quitBtn:hover { border-color: #ff7a7a; color: #ff9d9d; transform: rotate(90deg); }
+  #quitScreen { z-index: 25; }
+  .quitBox { width: min(440px, 92vw); background: #161b26; border: 2px solid #2c3444; border-radius: 16px;
+    padding: 26px 28px 24px; text-align: center; display: flex; flex-direction: column; gap: 14px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+  .quitBox h2 { font-size: 22px; color: #fff; letter-spacing: 2px; }
+  .quitBox p { font-size: 14px; color: #9aa3b5; line-height: 1.7; }
+  .quitBtns { display: flex; gap: 12px; justify-content: center; margin-top: 6px; flex-wrap: wrap; }
+  .quitBtns .bigBtn { line-height: 1.35; padding: 10px 28px; }
+
+  /* ===== 教程浮层 ===== */
+  #tutorialScreen { z-index: 20; background: #0d1118f2; }
+  .tutBox { width: min(720px, 94vw); background: #161b26; border: 2px solid #2c3444; border-radius: 16px;
+    padding: 22px 26px 20px; display: flex; flex-direction: column; gap: 16px; }
+  .tutHead { display: flex; align-items: center; gap: 14px; }
+  .tutHead h2 { font-size: 22px; color: #fff; letter-spacing: 2px; margin-right: auto; }
+  .tutHead .langRow { margin: 0; }
+  .tutHead .langBtn { padding: 6px 16px; font-size: 13px; }
+  .tutClose { background: #232936; color: #9aa3b5; border: 2px solid #333a4a; border-radius: 10px;
+    width: 38px; height: 34px; font-size: 15px; cursor: pointer; transition: all .15s; }
+  .tutClose:hover { border-color: #ff7a7a; color: #ff9d9d; }
+  .tutBody { min-height: 300px; }
+  .tutPage h3 { font-size: 18px; color: #7ee08a; letter-spacing: 2px; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid #262d3b; }
+  .tutItem { display: flex; align-items: flex-start; gap: 12px; padding: 7px 0; font-size: 14px;
+    color: #c7ceda; line-height: 1.65; }
+  .tutItem .ico { flex: 0 0 auto; min-width: 62px; text-align: center; font-size: 12px; color: #cfd6e4;
+    background: #2b3242; border: 1px solid #3a4254; border-radius: 6px; padding: 3px 8px; }
+  .tutItem .ico.k { font-weight: bold; letter-spacing: 1px; }
+  .tutItem .ico.e { background: none; border: none; font-size: 17px; min-width: 26px; }
+  .tutFoot { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .tutFoot .bigBtn { padding: 10px 26px; font-size: 15px; }
+  .tutFoot .bigBtn:disabled { opacity: .45; }
+  .dots { display: flex; gap: 8px; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; background: #2c3444; transition: all .25s ease; }
+  .dots i.on { background: #4caf50; box-shadow: 0 0 10px #4caf5099; transform: scale(1.3); }
 
   #endScreen { display: none; }
   #endTitle { font-size: 52px; margin-bottom: 10px; }
@@ -168,6 +251,9 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<canvas id="bgScene"></canvas>
+<canvas id="bgMap"></canvas>
+<canvas id="bgHero"></canvas>
 <canvas id="minimap" width="300" height="150"></canvas>
 
 <div id="kdaBar"><small>K / D / A</small><span class="k">0</span> / <span class="d">0</span> / <span class="a">0</span></div>
@@ -227,11 +313,44 @@
   <h1 id="ssTitle">⚔️ 峡谷对决</h1>
   <div class="sub" id="ssSub">5 v 5 推塔对战 · 经验只能通过击败敌人获得 · 3 级解锁技能 · 最高 9 级</div>
   <div id="roleCards"></div>
-  <button class="bigBtn" id="startBtn" disabled>开始战斗</button>
+  <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center">
+    <button class="bigBtn" id="startBtn" disabled>开始战斗</button>
+    <button class="bigBtn" id="tutorialBtn" style="background:linear-gradient(135deg,#3f8cff,#2b5fb8); border-color:#6aa6ff; padding:13px 34px">📖 教程</button>
+  </div>
   <div class="ctrlTip" id="ssTip">
     <b>W A S D</b> 移动 &nbsp; <b>鼠标</b> 瞄准 &nbsp; <b>左键</b> 普通攻击（可长按） &nbsp; <b>右键</b> 释放技能 &nbsp; <b>Q</b> 使用道具（钩子）<br>
     <b>滚轮</b> 缩放视角 &nbsp; <b>鼠标移到屏幕边缘</b> 平移视角 &nbsp; <b>空格</b> 视角回到角色<br>
     所有攻击均为非指向性弹道，靠走位躲避敌方攻击与技能 · 岩石可挡弹道 · 草丛可隐身 · 拾取道具获得增益（钩子按 Q 发射） · 阵亡后会在泉水复活
+  </div>
+</div>
+
+<div class="overlay" id="quitScreen" style="display:none">
+  <div class="quitBox">
+    <h2 id="quitTitle">结束游戏？</h2>
+    <p id="quitMsg">当前对局将直接结束，确定要返回初始页面吗？</p>
+    <div class="quitBtns">
+      <button class="bigBtn" id="quitYes" style="background:linear-gradient(135deg,#ef5350,#c62828); border-color:#ef5350; padding:12px 34px; font-size:17px">是，退出游戏</button>
+      <button class="bigBtn" id="quitNo" style="padding:12px 34px; font-size:17px">否，继续游戏</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="tutorialScreen" style="display:none">
+  <div class="tutBox">
+    <div class="tutHead">
+      <h2 id="tutTitle">📖 游戏教程</h2>
+      <div class="langRow">
+        <button class="langBtn sel" id="tutLangCn">🇨🇳 中文</button>
+        <button class="langBtn" id="tutLangEn">🇺🇸 English</button>
+      </div>
+      <button class="tutClose" id="tutClose" title="关闭 / Close">✕</button>
+    </div>
+    <div class="tutBody" id="tutBody"></div>
+    <div class="tutFoot">
+      <button class="bigBtn" id="tutPrev" style="padding:10px 30px;font-size:15px">‹ 上一页</button>
+      <div class="dots" id="tutDots"></div>
+      <button class="bigBtn" id="tutNext" style="padding:10px 30px;font-size:15px">下一页 ›</button>
+    </div>
   </div>
 </div>
 
@@ -242,6 +361,7 @@
   <button class="bigBtn" id="againBtn">再来一局</button>
 </div>
 
+<button id="quitBtn" title="结束游戏 / Quit">✕</button>
 <button id="gearBtn" title="设置 / Settings">⚙</button>
 <div class="overlay" id="settingsScreen">
   <h1 id="setTitle" style="font-size:28px;color:#4caf50;letter-spacing:3px;margin-bottom:22px">⚙ 设置</h1>
@@ -259,6 +379,7 @@
 </div>
 
 <script src="heroes.js"></script>
+<script src="scene.js?v=3"></script>
 <script>
 'use strict';
 /* ================= 基础配置 ================= */
@@ -915,7 +1036,7 @@ function buildRoleCards() {
       : `Melee · ${r.meleeR} range${r.meleeArc && r.meleeArc < 1 ? ` · ${Math.round(r.meleeArc * 360)}° frontal` : ' · 360°'}`;
     const rangeTxt = CN() ? `攻击距离 ${r.range}` : `Range ${r.range}`;
     const faceEl = ['marksman', 'assassin', 'tank', 'support'].includes(k)
-      ? '<div class="face"><canvas class="rolePrev" width="78" height="72" style="display:block;margin:0 auto"></canvas></div>'
+      ? '<div class="face"><canvas class="rolePrev" width="116" height="108" style="display:block;margin:0 auto"></canvas></div>'
       : `<div class="face">${r.face}</div>`;
     c.innerHTML = `${faceEl}<h3>${roleName(k)}</h3>
       <div class="st">${CN() ? '生命' : 'HP'} ${r.hp}（+${r.hpL}${CN() ? '/级' : '/lv'}）<br>${CN() ? '攻击' : 'AD'} ${r.atk}（+${r.atkL}${CN() ? '/级' : '/lv'}）<br>${r.meleeR ? meleeTxt : rangeTxt} · ${CN() ? '移速' : 'MS'} ${r.move}</div>
@@ -930,10 +1051,10 @@ function buildRoleCards() {
     if (prev) {
       const drawPrev = () => {
         const g2 = prev.getContext('2d');
-        g2.clearRect(0, 0, 78, 72);
+        g2.clearRect(0, 0, 116, 108);
         g2.lineCap = 'round'; g2.lineJoin = 'round';
         g2.save();
-        g2.translate(39, 67); g2.scale(k === 'tank' ? 1.3 : 1.6, k === 'tank' ? 1.3 : 1.6);
+        g2.translate(58, 100); g2.scale(k === 'tank' ? 1.75 : 2.15, k === 'tank' ? 1.75 : 2.15);
         const mock = { team: 0, vx: 0, vy: 0, vaim: -0.5, aim: -0.5,
           walkPhase: 0, atkCdT: 0, skillAnimT: 0, stealthT: 0, isPlayer: false, lastCombat: -99 };
         if (k === 'marksman') drawMarksmanModel({ ...mock, role: 'marksman' }, 1, g2);
@@ -952,6 +1073,7 @@ function applyStartLang() {
     ? '5 v 5 推塔对战 · 经验只能通过击败敌人获得 · 3 级解锁技能 · 最高 9 级'
     : '5v5 lane battle · XP only from kills · skills at Lv3 · max Lv9';
   $('startBtn').textContent = CN() ? '开始战斗' : 'BATTLE';
+  $('tutorialBtn').textContent = CN() ? '📖 教程' : '📖 Tutorial';
   $('ssTip').innerHTML = CN()
     ? `<b>W A S D</b> 移动 &nbsp; <b>鼠标</b> 瞄准 &nbsp; <b>左键</b> 普通攻击（可长按） &nbsp; <b>右键</b> 释放技能 &nbsp; <b>Q</b> 使用道具（钩子）<br>
        <b>滚轮</b> 缩放视角 &nbsp; <b>鼠标移到屏幕边缘</b> 平移视角 &nbsp; <b>空格</b> 视角回到角色<br>
@@ -969,6 +1091,188 @@ function applyStartLang() {
     : 'WASD move · mouse aim · wheel zoom<br>LMB attack · RMB skill · Q item · Space recenter';
   buildRoleCards();
 }
+/* ================= 结束游戏 ================= */
+function quitTexts() {                                   // 中英文同时显示，不随游戏语言切换
+  $('quitTitle').textContent = '结束游戏？ / Quit Game?';
+  $('quitMsg').innerHTML = '当前对局将直接结束，确定要返回初始页面吗？<br>'
+    + '<span style="color:#7a8194">This match will end right now. Return to the main page?</span>';
+  $('quitYes').innerHTML = '是，退出游戏<br><span style="font-size:12px;font-weight:normal;opacity:.85">Yes, quit</span>';
+  $('quitNo').innerHTML = '否，继续游戏<br><span style="font-size:12px;font-weight:normal;opacity:.85">No, keep playing</span>';
+}
+function openQuit() {
+  quitTexts();
+  $('quitScreen').style.display = 'flex';
+  if (state === 'playing') state = 'paused';            // 弹窗期间暂停对局
+  Sfx.play('ui');
+}
+function closeQuit() {
+  $('quitScreen').style.display = 'none';
+  if (state === 'paused') state = 'playing';            // 否 → 回到游戏进程
+  Sfx.play('ui');
+}
+$('quitBtn').onclick = openQuit;
+$('quitNo').onclick = closeQuit;
+$('quitYes').onclick = () => { Sfx.play('ui'); location.href = 'index.html'; };   // 是 → 返回初始页面
+// ESC 在弹窗打开时等同"否"
+if (typeof window !== 'undefined') window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('quitScreen').style.display === 'flex') closeQuit();
+});
+
+/* ================= 登录/选人界面背景 ================= */
+// 登录页：选中的地图铺满背景；选人页：峡谷夜景 + 选中英雄的大号淡影
+function refreshMapBg() {
+  const bg = $('bgMap'), g = bg.getContext('2d');
+  const w = Math.min(1920, Math.round(innerWidth * 1.6)), h = Math.min(1080, Math.round(innerHeight * 1.6));
+  bg.width = w; bg.height = h;
+  const def = MAPS.find(m => m.key === selectedMap) || MAPS[0];
+  g.clearRect(0, 0, w, h);
+  drawMapPreview(bg, def);
+  g.fillStyle = 'rgba(13,18,25,.07)'; g.fillRect(0, 0, w, h);      // 轻微压暗，保证文字可读
+}
+const heroBgMock = { team: 0, vx: 0, vy: 0, vaim: -0.35, aim: -0.35, walkPhase: 0,
+  atkCdT: 0, skillAnimT: 0, stealthT: 0, shield: 0, speedT: 0, sprintT: 0, slowT: 0,
+  isPlayer: false, lastCombat: 0, bowRaise: 0, lvl: 5, hp: 1, maxHp: 1, dead: false };
+function drawHeroBg(dt) {
+  const bg = $('bgHero'), g = bg.getContext('2d');
+  if (!bg.classList.contains('on')) return;
+  const w = innerWidth, h = innerHeight;
+  if (bg.width !== w || bg.height !== h) { bg.width = w; bg.height = h; }
+  g.clearRect(0, 0, w, h);
+  const role = selectedRole || 'marksman';
+  const m = heroBgMock; m.role = role;
+  m.walkPhase += dt * 1.6;                                       // 缓慢踏步，让淡影有生气
+  const s = Math.min(w, h) / 300 * 2.1;                          // 大到贯穿画面但不过界
+  g.save();
+  g.translate(w * 0.5, h * 0.94);
+  g.scale(s, s); g.lineCap = 'round'; g.lineJoin = 'round';
+  if (role === 'marksman') drawMarksmanModel(m, 1, g);
+  else if (role === 'assassin') drawAssassinModel(m, 1, g);
+  else if (role === 'tank') drawTankModel(m, 1, g);
+  else drawSupportModel(m, 1, g);
+  g.restore();
+}
+let heroBgRaf = 0, heroBgLast = performance.now();
+function heroBgLoop(now) {
+  const dt = Math.min(0.05, (now - heroBgLast) / 1000); heroBgLast = now;
+  drawHeroBg(dt);
+  heroBgRaf = requestAnimationFrame(heroBgLoop);
+}
+// 界面状态 → 背景切换
+function setMenuBg(mode) {                                       // 'login' | 'select' | 'none'
+  const sc = $('bgScene'), mp = $('bgMap'), hr = $('bgHero');
+  sc.classList.toggle('on', mode === 'select');
+  mp.classList.toggle('on', mode === 'login');
+  hr.classList.toggle('on', mode === 'select');
+  if (mode === 'login') { CanyonScene.stop(); refreshMapBg(); }
+  if (mode === 'select') { CanyonScene.start(sc); if (!heroBgRaf) heroBgRaf = requestAnimationFrame(heroBgLoop); }
+  if (mode === 'none') { CanyonScene.stop(); if (heroBgRaf) { cancelAnimationFrame(heroBgRaf); heroBgRaf = 0; } }
+}
+window.addEventListener('resize', () => { if ($('bgMap').classList.contains('on')) refreshMapBg(); });
+
+/* ================= 新手教程 ================= */
+// 四页教程：移动视角 / 攻击技能 / 地图目标 / 成长符文；中英文双语
+const TUT_PAGES = [
+  {
+    cn: { t: '① 移动与视角', items: [
+      ['k', 'W A S D', '移动英雄（方向键同样可用）'],
+      ['e', '🖱️', '鼠标指向即为攻击与技能的瞄准方向'],
+      ['k', '滚 轮', '缩放视角（1.2x ~ 2.4x）'],
+      ['k', '空 格', '视角立即回到角色身上'],
+      ['e', '⚔️', '战斗中视角自动锁定在角色上，脱手后平滑回中——专心打架不用分心调镜头'],
+    ] },
+    en: { t: '① Movement & Camera', items: [
+      ['k', 'W A S D', 'Move your hero (arrow keys work too)'],
+      ['e', '🖱️', 'The mouse cursor sets your attack and skill aim'],
+      ['k', 'Wheel', 'Zoom the view (1.2x ~ 2.4x)'],
+      ['k', 'Space', 'Snap the camera back to your hero'],
+      ['e', '⚔️', 'During combat the camera locks onto your hero and eases back when released — no camera juggling mid-fight'],
+    ] },
+  },
+  {
+    cn: { t: '② 攻击与技能', items: [
+      ['k', '左 键', '普通攻击，可长按连续射击'],
+      ['k', '右 键', '释放英雄技能（需要 3 级解锁，之后主要输出手段）'],
+      ['k', 'Q 键', '使用道具：发射钩子，把命中的敌人拉到身前'],
+      ['e', '🎯', '所有攻击都是非指向性弹道——你和敌人都能靠走位躲开，预判比站桩重要'],
+      ['e', '🪨', '岩石可以挡住弹道；刺客的近战挥击不能隔墙命中'],
+      ['k', 'M / ESC', 'M 快速静音，ESC 打开设置'],
+    ] },
+    en: { t: '② Attacking & Skills', items: [
+      ['k', 'LMB', 'Basic attack — hold to keep firing'],
+      ['k', 'RMB', 'Cast your hero skill (unlocks at Lv3, then your main damage)'],
+      ['k', 'Q', 'Use item: fire the hook and pull the enemy to you'],
+      ['e', '🎯', 'Every attack is an untargeted projectile — both sides can dodge, so aim beats standing still'],
+      ['e', '🪨', 'Rocks block projectiles; the assassin melee swing cannot hit through walls'],
+      ['k', 'M / ESC', 'M mutes quickly, ESC opens settings'],
+    ] },
+  },
+  {
+    cn: { t: '③ 地图与目标', items: [
+      ['e', '🗺️', '上 / 中 / 下三路兵线连接双方基地，沿兵线推进最安全'],
+      ['e', '🏰', '每方 4 座防御塔（内塔 + 外塔），共 8 座；塔会攻击进入射程的敌人'],
+      ['e', '💠', '拆掉敌方全部防御塔后，攻击敌方水晶即可获胜'],
+      ['e', '🌿', '走进草丛可隐藏身形（敌人贴身或同处一丛时仍会被发现）'],
+      ['e', '💧', '阵亡后在泉水复活，等待期间可以看看全局'],
+      ['e', '📦', '地图上会刷新增益道具，走过去拾取，钩子按 Q 发射'],
+    ] },
+    en: { t: '③ Map & Objective', items: [
+      ['e', '🗺️', 'Top / mid / bottom lanes connect both bases — pushing along a lane is safest'],
+      ['e', '🏰', '4 turrets per side (inner + outer), 8 in total; turrets shoot anything in range'],
+      ['e', '💠', 'Destroy every enemy turret, then break the enemy crystal to win'],
+      ['e', '🌿', 'Grass hides you (still revealed if an enemy is right next to you or in the same bush)'],
+      ['e', '💧', 'You respawn at the fountain after dying — use the wait to read the map'],
+      ['e', '📦', 'Buff pickups spawn around the map; walk over them, the hook fires with Q'],
+    ] },
+  },
+  {
+    cn: { t: '④ 成长与符文', items: [
+      ['e', '⚔️', '经验只能来自战斗：击杀英雄 +170，助攻 +100，推倒防御塔 +170'],
+      ['e', '📈', '每升 1 级提升生命上限与攻击力，技能伤害也随等级提高，最高 9 级'],
+      ['k', 'Lv 2 / 5 / 8', '各获得一枚海克斯强化符文（三选一），可大幅改变打法'],
+      ['e', '🌈', '符文分棱彩与黄金品质，效果可叠加——同一局里越打越强'],
+      ['e', '💚', '脱离战斗 5 秒后开始自动回复生命'],
+    ] },
+    en: { t: '④ Progression & Augments', items: [
+      ['e', '⚔️', 'XP comes only from combat: +170 per champion kill, +100 per assist, +170 per turret'],
+      ['e', '📈', 'Each level raises max HP and attack damage, and skills scale with level — cap is Lv9'],
+      ['k', 'Lv 2 / 5 / 8', 'Each grants one HEX augment (pick 1 of 3) that can reshape your playstyle'],
+      ['e', '🌈', 'Augments come in Prismatic and Gold tiers and stack — you snowball as the match goes on'],
+      ['e', '💚', 'Out of combat for 5s, health starts regenerating'],
+    ] },
+  },
+];
+let tutPage = 0;
+function tutText() { return TUT_PAGES[tutPage][CN() ? 'cn' : 'en']; }
+function drawTutorial() {
+  const p = tutText();
+  $('tutTitle').textContent = CN() ? '📖 游戏教程' : '📖 Tutorial';
+  $('tutBody').innerHTML = '<div class="tutPage"><h3>' + p.t + '</h3>' +
+    p.items.map(([kind, ico, txt]) =>
+      '<div class="tutItem"><span class="ico ' + (kind === 'k' ? 'k' : 'e') + '">' + ico + '</span><span>' + txt + '</span></div>').join('') + '</div>';
+  $('tutPrev').disabled = tutPage === 0;
+  $('tutNext').textContent = tutPage === TUT_PAGES.length - 1 ? (CN() ? '完成 ✓' : 'Done ✓') : (CN() ? '下一页 ›' : 'Next ›');
+  $('tutPrev').textContent = CN() ? '‹ 上一页' : '‹ Prev';
+  $('tutDots').innerHTML = TUT_PAGES.map((_, i) => '<i class="' + (i === tutPage ? 'on' : '') + '"></i>').join('');
+  $('tutLangCn').classList.toggle('sel', CN());
+  $('tutLangEn').classList.toggle('sel', !CN());
+}
+function openTutorial() {
+  tutPage = 0; drawTutorial();
+  $('tutorialScreen').style.display = 'flex';
+  Sfx.play('ui');
+}
+function closeTutorial() { $('tutorialScreen').style.display = 'none'; Sfx.play('ui'); }
+$('tutorialBtn').onclick = openTutorial;
+$('tutClose').onclick = closeTutorial;
+$('tutPrev').onclick = () => { if (tutPage > 0) { tutPage--; drawTutorial(); Sfx.play('ui'); } };
+$('tutNext').onclick = () => {
+  if (tutPage < TUT_PAGES.length - 1) { tutPage++; drawTutorial(); Sfx.play('ui'); }
+  else closeTutorial();
+};
+// 教程内的语言切换：连同整个游戏一起切
+$('tutLangCn').onclick = () => { LANG = 'cn'; applyLoginLang(); applyStartLang(); drawTutorial(); };
+$('tutLangEn').onclick = () => { LANG = 'en'; applyLoginLang(); applyStartLang(); drawTutorial(); };
+
 function applyLoginLang() {
   $('lgTitle').textContent = CN() ? '⚔️ 峡谷对决' : '⚔️ Canyon Duel';
   $('lgSub').textContent = CN() ? 'Canyon Duel · 5v5 推塔对战' : 'Canyon Duel · 5v5 MOBA battle';
@@ -1027,7 +1331,7 @@ function buildMapCards() {
     const card = document.createElement('div');
     card.className = 'mapCard' + (def.key === selectedMap ? ' sel' : '');
     card._def = def;
-    const cv = document.createElement('canvas'); cv.width = 178; cv.height = 80;
+    const cv = document.createElement('canvas'); cv.width = 208; cv.height = 96;
     drawMapPreview(cv, def);
     const nm = document.createElement('div'); nm.className = 'nm';
     nm.textContent = CN() ? def.name : def.en;
@@ -1039,6 +1343,7 @@ function buildMapCards() {
       document.querySelectorAll('.mapCard').forEach(x => x.classList.remove('sel'));
       card.classList.add('sel');
       showMapDesc(def);
+      if (state === 'login') refreshMapBg();          // 背景地图跟随选择
       Sfx.play('ui');
     };
     grid.appendChild(card);
@@ -1056,10 +1361,11 @@ $('loginBtn').onclick = () => {
   $('startScreen').style.display = 'flex';
   state = 'select';
   applyStartLang();
+  setMenuBg('select');
 };
 $('userName').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
-$('startBtn').onclick = () => { Sfx.play('ui'); AudioSys.setBgmMode('battle'); $('startScreen').style.display = 'none'; initWorld(selectedRole); };
-$('againBtn').onclick = () => { Sfx.play('ui'); AudioSys.setBgmMode('menu'); AudioSys.startBgm(); $('endScreen').style.display = 'none'; $('hud').style.display = 'none'; $('startScreen').style.display = 'flex'; state = 'select'; applyStartLang(); };
+$('startBtn').onclick = () => { Sfx.play('ui'); AudioSys.setBgmMode('battle'); setMenuBg('none'); $('startScreen').style.display = 'none'; initWorld(selectedRole); $('quitBtn').style.display = 'block'; };
+$('againBtn').onclick = () => { Sfx.play('ui'); AudioSys.setBgmMode('menu'); AudioSys.startBgm(); setMenuBg('select'); $('endScreen').style.display = 'none'; $('hud').style.display = 'none'; $('quitBtn').style.display = 'none'; $('startScreen').style.display = 'flex'; state = 'select'; applyStartLang(); };
 applyLoginLang();
 buildRoleCards();
 buildMapCards();
@@ -1169,7 +1475,10 @@ window.addEventListener('keydown', e => {
     else centerMsg(CN() ? 'Q 仅用于道具（钩子），技能按右键' : 'Q is for items (hook) — RMB casts skills', 800);
   }
   if (e.target && e.target.tagName === 'INPUT') return;   // 输入框内不触发快捷键
-  if (k === 'escape') toggleSettings();
+  if (k === 'escape') {
+    if ($('tutorialScreen').style.display === 'flex') closeTutorial();
+    else toggleSettings();
+  }
   if (k === 'm') AudioSys.toggleMute();
 });
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
@@ -2664,6 +2973,7 @@ function loop(now) {
   } catch (e) { console.error('frame error', e); }
   requestAnimationFrame(loop);
 }
+setMenuBg('login');                           // 登录页：选中的地图作为背景
 requestAnimationFrame(loop);
 </script>
 </body>
