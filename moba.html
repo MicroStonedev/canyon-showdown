@@ -464,6 +464,11 @@ const RARE_SPOTS = () => [
   { x: W / 2, y: 740, n: CN() ? '下方' : 'bottom' },
 ];
 
+// ===== NPC 英文名映射 =====
+const NPC_EN = { '寒冰':'Frost', '疾风':'Gale', '铁壁':'Ironwall', '晨曦':'Dawnrise',
+                 '夜刃':'Nightblade', '烈焰':'Blaze', '磐石':'Boulder', '星辰':'Starlight', '暗影':'Shadow' };
+function npcName(n) { return CN() ? n : (NPC_EN[n] || n); }
+
 // ===== 场上随机刷新的道具 =====
 const PICKUP_KINDS = [
   { k: 'heal',    ico: '❤️', name: '血包', en: 'Heal', desc: '立即回复 35% 生命', dEn: 'Instantly restore 35% HP' },
@@ -513,8 +518,8 @@ function applyPickup(c, p) {
   else { c.moveBonus += 15; if (c.isPlayer) feed(CN() ? '⚒️ 属性锻造器：移速 +15' : '⚒️ Forge: +15 MS', '#ffd54f'); }
   }
   if (info) {
-    fx.push({ type: 'text', x: c.x, y: c.y - 44, txt: p.ico + ' ' + info.name, color: '#ffffff', life: 1 });
-    if (c.isPlayer) feed(`拾取 ${p.ico}【${CN() ? info.name : info.en}】${CN() ? info.desc : info.dEn}`);
+    fx.push({ type: 'text', x: c.x, y: c.y - 44, txt: p.ico + ' ' + (CN() ? info.name : info.en), color: '#ffffff', life: 1 });
+    if (c.isPlayer) feed(`${CN() ? '拾取' : 'Picked up'} ${p.ico}【${CN() ? info.name : info.en}】${CN() ? info.desc : info.dEn}`);
   }
 }
 // 钩子：Q 发射的直线弹道，命中敌方英雄后将其拉到身前
@@ -1406,7 +1411,7 @@ function hurtChamp(c, dmg, src) {
         fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: (CN() ? '助攻' : 'ASSIST') + ' +100 XP', color: '#ffd54f', life: 1 });
       if (a.hexes && a.hexes.soul) {                              // 灵魂虹吸
         a.hp = Math.min(a.maxHp, a.hp + a.maxHp * 0.25);
-        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: '灵魂虹吸', color: '#b39ddb', life: 1 });
+        fx.push({ type: 'text', x: a.x, y: a.y - 30, txt: CN() ? '灵魂虹吸' : 'Soul Siphon', color: '#b39ddb', life: 1 });
       }
       if (a.hexes && a.hexes.tankeng) {                           // 坦克引擎叠层
         a.hexStacks++; a.maxHp += (a.baseMaxHp || ROLES[a.role].hp) * 0.05; a.hp += (a.baseMaxHp || ROLES[a.role].hp) * 0.05;
@@ -1417,8 +1422,8 @@ function hurtChamp(c, dmg, src) {
       pickups.push({ x: clamp(c.x, 30, W - 30), y: clamp(c.y, 30, H - 30), k: 'forge', ico: '⚒️', t: Math.random() * 6.28 });
       if (src.isPlayer) feed(CN() ? '🎲 掷骰狂人：掉落了【属性锻造器】' : '🎲 Dice Gambler: dropped a Forge', '#ffd54f');
     }
-    feed(src ? (CN() ? `${src.name} 击杀了 ${c.name}` : `${src.name} killed ${c.name}`)
-             : (CN() ? '防御塔击杀了 ' + c.name : 'Turret killed ' + c.name), TEAMCOL[c.team]);
+    feed(src ? (CN() ? `${npcName(src.name)} 击杀了 ${npcName(c.name)}` : `${npcName(src.name)} killed ${npcName(c.name)}`)
+             : (CN() ? '防御塔击杀了 ' + npcName(c.name) : 'Turret killed ' + npcName(c.name)), TEAMCOL[c.team]);
     Sfx.play(c.isPlayer ? 'death' : 'kill', c.x, c.y);
     if (c.isPlayer) centerMsg('你已阵亡', 1200);
   }
@@ -1770,7 +1775,7 @@ function update(dt) {
             dmg2 *= 1 + (p.owner.pursuitD || 0);                // 威能之追求
             if (p.owner.hexes && p.owner.hexes.pearl && Math.random() < 0.3) {
               dmg2 *= 1.75;                                     // 珠光护手：技能暴击
-              fx.push({ type: 'text', x: c.x, y: c.y - 34, txt: '暴击!', color: '#ffd54f', life: 0.6 });
+              fx.push({ type: 'text', x: c.x, y: c.y - 34, txt: CN() ? '暴击!' : 'CRIT!', color: '#ffd54f', life: 0.6 });
             }
             onSkillHit(p.owner);
           }
@@ -1936,7 +1941,7 @@ function updateHud() {
   $('timer').textContent = fmtTime(gameTime);
   $('bCryBar').style.width = (crystals[0].hp / crystals[0].maxHp * 100) + '%';
   $('rCryBar').style.width = (crystals[1].hp / crystals[1].maxHp * 100) + '%';
-  if (player.dead) centerMsg('已阵亡 · ' + Math.ceil(player.respawnT) + ' 秒后复活', 300);
+  if (player.dead) centerMsg(CN() ? '已阵亡 · ' + Math.ceil(player.respawnT) + ' 秒后复活' : 'Defeated · respawn in ' + Math.ceil(player.respawnT) + 's', 300);
 }
 
 /* ================= 摄像机 ================= */
@@ -2318,7 +2323,7 @@ function draw() {
       ctx.fillRect(bx, by - 2, Math.min(bw, bw * c.shield / c.maxHp), 7);
     }
     ctx.fillStyle = '#9aa3b5'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(c.name, c.x, c.y - 46 * s);
+    ctx.fillText(`${npcName(c.name)} Lv${c.lvl}`, c.x, c.y - 46 * s);
   });
 
   // 钩绳
