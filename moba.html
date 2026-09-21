@@ -671,11 +671,11 @@ function seenBy(v, t) {
   return dist(v, t) < 130 || BUSHES.some(b => inRect(v, b) && inRect(t, b));
 }
 // 两点间视线是否被岩石阻挡（近战挥击不能隔墙打人）
-function losBlocked(x0, y0, x1, y1) {
+function losBlocked(x0, y0, x1, y1, pad = 5) {
   const d = Math.hypot(x1 - x0, y1 - y0), steps = Math.max(1, Math.ceil(d / 16));
   for (let i = 1; i < steps; i++) {
     const px = x0 + (x1 - x0) * i / steps, py = y0 + (y1 - y0) * i / steps;
-    if (WALLS.some(w => circleRectHit(px, py, 5, w))) return true;
+    if (WALLS.some(w => circleRectHit(px, py, pad, w))) return true;
   }
   return false;
 }
@@ -704,11 +704,12 @@ function resolveWalls(c) {
     }
   }
 }
-// AI 绕墙：前方 76px 有岩石就偏转方向
+// AI 绕墙：前方 76px 有岩石/岩浆/地图边界就偏转方向（边界为钳位而非墙体，须显式避让，否则顶边抖动）
 function avoidAngle(x, y, ang) {
   const clear = a => {
     const px = x + Math.cos(a) * 76, py = y + Math.sin(a) * 76;
-    return !WALLS.some(w => circleRectHit(px, py, 20, w)) && !LAVA.some(l => circleRectHit(px, py, 24, l));
+    return px > 44 && px < W - 44 && py > 44 && py < H - 44 &&
+           !WALLS.some(w => circleRectHit(px, py, 20, w)) && !LAVA.some(l => circleRectHit(px, py, 24, l));
   };
   if (clear(ang)) return ang;
   for (const off of [0.55, -0.55, 1.1, -1.1, 1.7, -1.7, 2.4, -2.4]) if (clear(ang + off)) return ang + off;
@@ -1479,7 +1480,7 @@ const speedOf = c => ROLES[c.role].move * (c.slowT > 0 ? 0.5 : 1) * (c.speedT > 
 /* ================= AI ================= */
 function nearestFoe(c, maxD) {
   let best = null, bd = maxD;
-  champs.forEach(t => { if (!t.dead && t.team !== c.team && seenBy(c, t)) { const d = dist(c, t); if (d < bd) { bd = d; best = t; } } });
+  champs.forEach(t => { if (!t.dead && t.team !== c.team && seenBy(c, t) && !losBlocked(c.x, c.y, t.x, t.y, 12)) { const d = dist(c, t); if (d < bd) { bd = d; best = t; } } });
   return best;
 }
 function nearestFoeStruct(c) {
@@ -1508,29 +1509,80 @@ function dodgeVec(c) {
 function updateBot(c, dt) {
   const a = c.ai; a.t += dt;
   const home = { x: c.team === 0 ? 120 : 1880, y: 450 };   // 复活点（泉水已无回复）
+  const visFoe = t => t && !t.dead && seenBy(c, t) && !losBlocked(c.x, c.y, t.x, t.y, 12);
+  // 停滞看门狗（通用）：非战斗走位时全速指令却 1.2s 净位移不足 25px（顶墙/顶边界/角落打转/拥堵）→ 侧向绕行 1.2s
+  const wasAttack = a.mode === 'attack';
+  a.mode = 'move';
+  if (!wasAttack && Math.hypot(c.vx, c.vy) > speedOf(c) * 0.5) {
+    if (!a.stkT) { a.ckx = c.x; a.cky = c.y; }
+    a.stkT = (a.stkT || 0) + dt;
+    if (a.stkT >= 1.2) {
+      if (Math.hypot(c.x - a.ckx, c.y - a.cky) < 25) {
+        if (Math.random() < 0.3 || !a.dts) a.dts = Math.random() < 0.5 ? 1 : -1;   // 换向重掷，防同侧反复卡死
+        a.detourT = 1.2;
+        const fa = Math.atan2(c.vy, c.vx);               // 以当前移动朝向的侧向为绕行方向
+        a.dtx = clamp(c.x + Math.cos(fa + a.dts * Math.PI / 2) * 180, 60, W - 60);
+        a.dty = clamp(c.y + Math.sin(fa + a.dts * Math.PI / 2) * 180, 80, H - 80);
+      }
+      a.stkT = 0;
+    }
+  } else a.stkT = 0;
+  if (a.detourT > 0) {                                   // 绕行：朝侧向路点直走，不受走位微调干扰
+    a.detourT -= dt;
+    let ang = Math.atan2(a.dty - c.y, a.dtx - c.x); ang = avoidAngle(c.x, c.y, ang);
+    c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c);
+    c.aim = ang;
+    applyDodge(c);
+    return;
+  }
   if (c.hp < c.maxHp * 0.22) a.st = 'retreat';
   if (a.st === 'retreat') {
     if (c.hp > c.maxHp * 0.5) a.st = 'push';
     else {
-      // 无泉水回复：不回城，向远离最近敌人的方向拉扯、就地回血
+      // 无泉水回复：不回城，向远离最近敌人的方向拉扯、就地回血（失去视线时按最后已知位置继续拉扯，防抖动）
       const foe = nearestFoe(c, 900);
-      let ang = foe ? Math.atan2(c.y - foe.y, c.x - foe.x) : Math.atan2(home.y - c.y, home.x - c.x);
-      ang = avoidAngle(c.x, c.y, ang);
-      c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c); applyDodge(c); return;
+      if (foe) a.lastFoe = { x: foe.x, y: foe.y, t: a.t };
+      const ref = foe || (a.lastFoe && a.t - a.lastFoe.t < 1 ? a.lastFoe : null);
+      if (ref) {
+        let ang = Math.atan2(c.y - ref.y, c.x - ref.x);
+        ang = avoidAngle(c.x, c.y, ang);
+        c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c);
+      } else if (dist(c, home) > 90) {                     // 无威胁：向复活点方向拉开
+        let ang = Math.atan2(home.y - c.y, home.x - c.x);
+        ang = avoidAngle(c.x, c.y, ang);
+        c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c);
+      } else {                                             // 已到安全点：站定回血，不再顶点位抖动
+        c.vx = 0; c.vy = 0;
+      }
+      applyDodge(c); return;
     }
   }
 
   const foe = nearestFoe(c, 560);
+  if (foe) a.lastFoe = { x: foe.x, y: foe.y, t: a.t };
+  let pick = foe;                                        // 滞回：目标仍可见则保持锁定，防视线边界闪烁
+  if (a.foeRef && a.foeRef !== foe && visFoe(a.foeRef) && dist(c, a.foeRef) <= 560 &&
+      (!foe || dist(c, foe) > dist(c, a.foeRef) * 0.7)) pick = a.foeRef;
+  a.foeRef = pick || null;
+
+  let tgt = null, td = 1e9, isStruct = false, isMem = false;
+  if (pick) { tgt = pick; td = dist(c, pick); }
+  if (!tgt && a.lastFoe && a.t - a.lastFoe.t < 2) {      // 失去视线：走向最后已知位置搜索
+    const md = dist(c, a.lastFoe);
+    if (md > 40 && md < 700) { tgt = a.lastFoe; td = md; isMem = true; }
+  }
   const st = nearestFoeStruct(c);
-  let tgt = null, td = 1e9, isStruct = false;
-  if (foe) { tgt = foe; td = dist(c, foe); }
-  if (st) { const sd = dist(c, st); if (!tgt || sd < td) { tgt = st; td = sd; isStruct = true; } }
+  if (st && !losBlocked(c.x, c.y, st.x, st.y, 12)) {     // 隔墙建筑不可选为目标（防站桩隔墙打墙抖动）
+    const sd = dist(c, st);
+    if (!tgt || sd < td) { tgt = st; td = sd; isStruct = true; }
+  }
 
   const range = ROLES[c.role].range;
-  if (c.hook && tgt && !isStruct && td > 140 && td < 500) {   // AI 有钩子时对中距离敌人出钩
+  if (c.hook && tgt && !isStruct && !isMem && td > 140 && td < 500) {   // AI 有钩子时对中距离敌人出钩
     c.aim = leadAim(c, tgt); if (Math.random() < 0.04) tryHook(c);
   }
-  if (tgt && td <= range * 0.92) {                       // 射程内：站桩输出 + 横向走位
+  if (tgt && !isMem && td <= range * 0.92) {             // 射程内：站桩输出 + 横向走位
+    a.mode = 'attack';
     c.aim = isStruct ? Math.atan2(tgt.y - c.y, tgt.x - c.x) : leadAim(c, tgt);
     tryAttack(c);
     const skR = { marksman: 600, assassin: 240, tank: 130, support: 380 }[c.role];
@@ -1538,11 +1590,11 @@ function updateBot(c, dt) {
     const s = Math.sin(a.t * 2.6 + a.ph) * 0.9;
     c.vx = -Math.sin(c.aim) * s * speedOf(c) * 0.7;
     c.vy =  Math.cos(c.aim) * s * speedOf(c) * 0.7;
-  } else if (tgt && td < 620) {                          // 追击
+  } else if (tgt && td < 620) {                          // 追击（含走向最后已知位置）
     let ang = Math.atan2(tgt.y - c.y, tgt.x - c.x); ang = avoidAngle(c.x, c.y, ang);
-    c.aim = isStruct ? ang : leadAim(c, tgt);
+    c.aim = (isStruct || isMem) ? ang : leadAim(c, tgt);
     c.vx = Math.cos(ang) * speedOf(c); c.vy = Math.sin(ang) * speedOf(c);
-    if (td <= range * 1.05) tryAttack(c);
+    if (!isMem && td <= range * 1.05) tryAttack(c);
   } else {                                               // 沿本路向敌方水晶推进
     const laneY = LANES[a.lane];
     const goalX = c.team === 0 ? 1830 : 170;
@@ -2281,7 +2333,7 @@ function draw() {
 
   // 英雄（火柴人建模）
   champs.forEach(c => {
-    if (c.dead || !seenBy(player, c)) return;
+    if (c.dead || !seenBy(player, c) || (c.team !== player.team && !player.dead && losBlocked(player.x, player.y, c.x, c.y))) return;
     const rd = ROLES[c.role], s = rd.r / 15;
     if (c.speedT > 0 || c.sprintT > 0) { ctx.strokeStyle = '#7ee08a88'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, 16 * s, 0, 7); ctx.stroke(); }
     if (c.slowT > 0) { ctx.strokeStyle = '#b39ddb88'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, 16 * s, 0, 7); ctx.stroke(); }
@@ -3637,7 +3689,7 @@ function drawMinimap() {
   });
   pickups.forEach(p => { mctx.fillStyle = p.k === 'rare' ? '#ffd54f' : '#cfd6e4'; mctx.fillRect(p.x * sx - 2, p.y * sy - 2, 4, 4); });
   champs.forEach(c => {
-    if (c.dead || !seenBy(player, c)) return;
+    if (c.dead || !seenBy(player, c) || (c.team !== player.team && !player.dead && losBlocked(player.x, player.y, c.x, c.y, 12))) return;
     mctx.beginPath(); mctx.arc(c.x * sx, c.y * sy, c.isPlayer ? 4 : 3, 0, 7);
     mctx.fillStyle = TEAMCOL[c.team]; mctx.fill();
     if (c.isPlayer) { mctx.strokeStyle = '#fff'; mctx.lineWidth = 1.5; mctx.stroke(); }
