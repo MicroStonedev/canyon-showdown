@@ -631,6 +631,8 @@ function applyPickup(c, p) {
     c.stealthT = 6;
   } else if (p.k === 'sprint') {
     c.sprintT = 5;
+  } else if (p.k === 'hook') {
+    c.hook = true;
   } else if (p.k === 'rare') {                           // 远古增益：拾取者的全队永久强化
     const rb = RARE_BUFFS.find(b => b.k === p.rareBuff);
     champs.forEach(a => { if (a.team === c.team) rb.apply(a); });
