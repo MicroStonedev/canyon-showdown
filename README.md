@@ -2,7 +2,7 @@ English | [简体中文](README.zh-CN.md)
 
 # Canyon Showdown - Web-based 5v5 MOBA Game
 
-A 5v5 tower-pushing battle game built with pure native HTML + CSS + JavaScript. Zero dependencies, single file — open it in a browser and play.
+A 5v5 tower-pushing battle game built with pure native HTML + CSS + JavaScript. Zero dependencies, no build step — open it in a browser and play.
 
 **Play online:** https://microstonedev.github.io/canyon-showdown/
 
@@ -10,26 +10,39 @@ A 5v5 tower-pushing battle game built with pure native HTML + CSS + JavaScript. 
 
 | File | Description |
 |---|---|
-| `index.html` | Landing page (GitHub Pages entry point) |
+| `index.html` | Landing page — canyon scene + live hero showcase (GitHub Pages entry point) |
 | `moba.html` | Canyon Showdown (5v5 MOBA tower-push battle) |
-| `champions.html` | Champion design sheet (Canvas concept art) |
+| `heroes.js` | Shared champion models — drawn by the game, the landing page and the design sheet |
+| `scene.js` | Shared canyon night scene — backdrop of the landing page and the game menus |
+| `champions.html` | Champion design sheet (live models, CN/EN) |
 
 ## How to Play
 
-Open `index.html` (landing page) or `moba.html` directly — nothing to install, no local server needed. On the login screen, enter your name (up to 10 characters) and pick a language — 中文 or English — the entire UI follows your choice, including menus, announcements, and augment cards.
+Open `index.html` (landing page) or `moba.html` directly — nothing to install, no local server needed. On the login screen, pick a language — 中文 or English, the entire UI follows your choice — pick one of three maps (your choice is remembered and becomes the backdrop of the login screen), enter your name (up to 10 characters), and go.
+
+On the hero-select screen, hover a champion card to compare stats, then either jump straight into battle or open the **tutorial** first.
+
+## Tutorial
+
+The 📖 button next to BATTLE opens a four-page overlay covering movement & camera, attacking & skills, map & objective, and progression & augments. It has its own CN/EN toggle that switches the whole game's language at once, and it is fully skippable for experienced players.
 
 ## Gameplay
 
 ### Controls
 
-- `W A S D` — Move
-- `Mouse` — Aim (the camera pans when the cursor touches a screen edge and recenters with `Space`)
+- `W A S D` — Move (arrow keys work too)
+- `Mouse` — Aim (the camera pans when the cursor touches a screen edge, and `Space` snaps it back to your hero)
 - `Left click` — Basic attack (hold to keep attacking); shots fire from your weapon and land exactly where you aim
 - `Right click` — Cast skill (unlocks at level 3)
 - `Q` — Use item (hook)
 - `ESC` — Settings / pause
 - `M` — Mute
 - `Mouse wheel` — Zoom the camera
+- `✕` (below the settings gear) — Quit, with a bilingual confirmation
+
+### Camera
+
+The camera follows your hero and stays locked onto it during combat — brushing a screen edge while kiting will not drag the view away, and the offset eases back to centre once you stop. Outside combat the edge pan still works for scouting, and `Space` snaps the view home instantly.
 
 ### Rules
 
@@ -37,16 +50,17 @@ Open `index.html` (landing page) or `moba.html` directly — nothing to install,
 - 8 turrets — two per lane per team (outer + inner) — plus a crystal that fights back with homing shots
 - Win by destroying the enemy crystal
 - **Turret shots lock on**: once fired they chase you any distance and cannot be dodged — leave the turret's range before it fires, or bring friends
-- **XP only comes from defeating enemy heroes**: 170 XP per kill, 100 per assist (you must have damaged the target within 8 seconds before it died); each level costs 100 XP, so matches end around level 8–9
+- **XP only comes from defeating enemy heroes and turrets**: 170 XP per champion kill, 100 per assist (you must have damaged the target within 8 seconds before it died), 170 for destroying a turret and 100 to allies who helped; each level costs 100 × level, so matches end around level 8–9
 - Leveling up increases HP, basic attack, and skill damage; skills unlock at level 3, max level 9
 - Regenerate 5% HP per second after being out of combat for 5 seconds (attacking counts as combat); the fountain only serves as a respawn point
-- All hero attacks are non-targeted projectiles that can be dodged by moving; rocks block movement and projectiles, bushes grant stealth
+- All hero attacks are non-targeted projectiles that can be dodged by moving; rocks block movement, projectiles and vision, bushes grant stealth
+- **Hit feedback**: landing a hit flashes the target white, throws impact sparks, floats the damage number, and prints an assist line for everyone who helped
 - **Multi-kill announcements**: double / triple / quadra / penta kill when you score several kills within a 10-second window
 - **MVP**: the end screen crowns the match MVP (kills ×3 + assists ×1.5 − deaths ×2 + damage/400)
 
 ### HUD
 
-- Top right — your K / D / A
+- Top right — your K / D / A, with the settings gear and the quit button below it
 - Left of the HP bar — your stats: attack damage, attack speed, move speed, ability haste (plus crit / dodge / vamp / damage reduction when you own the matching augments)
 - Above the HP bar — your augments with live stack counters (evil AD, science AD, tank stacks, haste, storm %, quest %)
 
@@ -58,6 +72,8 @@ Open `index.html` (landing page) or `moba.html` directly — nothing to install,
 | 🗡️ Assassin | Melee with a narrow 45° frontal hitbox, high burst, cannot attack through walls | Shadow Strike: dash (stops on hitting a wall) |
 | 🛡️ Tank | Melee 360° area damage, thick HP | Earthshatter: area damage + slow |
 | ✚ Support | Ranged projectiles; basic attacks that hit allies heal them | Holy Wave: damages enemies and heals friendly units in its path |
+
+Every champion is a hand-drawn vector model with a skeletal rig — legs and arms are driven by two-bone IK, so walk cycles, bow draws, sword swings and shield bashes all animate. The same models power the landing page showcase and the design sheet (`heroes.js`), so artwork and game never drift apart.
 
 ### HEX Augments (levels 2 / 5 / 8)
 
@@ -72,7 +88,7 @@ Three times per match, an ancient crystal spawns on the river line — top, midd
 
 ### Maps
 
-Pick a map on the login screen — hover a card for a description; your choice is remembered.
+Pick a map on the login screen — hover a card for a description; your choice is remembered and is drawn full-screen as the login screen's backdrop.
 
 - **Grasslands** — the classic layout: river, rocks, and balanced bushes
 - **Molten Cauldron** — lava river and pools: standing in lava slows you by 40% and burns 6% max HP per second (it never kills); bots steer around it
@@ -84,12 +100,15 @@ Pick a map on the login screen — hover a card for a description; your choice i
 
 ## Technical Notes
 
-- Single HTML file, Canvas 2D rendering, `requestAnimationFrame` main loop
-- Rectangle hitboxes framed on the champion models; turret shots are homing and undodgeable, champion projectiles are dodgeable skillshots
+- Canvas 2D rendering, `requestAnimationFrame` main loop, zero dependencies and no build step
+- Two shared JS modules: `heroes.js` (champion models) and `scene.js` (canyon night scene) are loaded by the landing page, the game and the design sheet
+- Rectangle hitboxes framed on the champion models (calibrated per role from the models' worst-case attack poses); turret shots are homing and undodgeable, champion projectiles are dodgeable skillshots
+- Hit flash is rendered as a white silhouette on a small off-screen canvas and blitted back — the main canvas never switches its composite operation, which used to force a full-canvas re-raster and stall hit frames
 - AI behavior includes dodging projectiles, pathing around rocks, retreating at low HP, grabbing items and map buffs, throwing hooks, and fighting for turrets
 - Sound effects and background music are fully synthesized with the Web Audio API — zero audio assets; the generative chiptune BGM shifts between menu and battle intensity
 - Audio settings (master / music / SFX volume, mute) live behind the ⚙ button or `ESC`; they pause the match in-game and persist via `localStorage`
-- Bilingual UI (简体中文 / English) selected on the login screen
+- Bilingual UI (简体中文 / English) selected on the login screen; the design sheet and the quit dialog carry their own CN/EN switches
+- The main loop is wrapped so a single bad frame degrades to a console error instead of freezing the match
 - No external libraries, no build step, no network requests
 
 ## License
